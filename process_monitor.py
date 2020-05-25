@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import signal
-from typing import Dict, Set
+from typing import Dict, Set, List
 
 from process import Process
 
@@ -14,18 +14,29 @@ class ProcessEvent(object):
         self.process = process
         self.data = data
 
+    def get_data(self):
+        return {"__type__": self.__class__.__name__, "process": self.process.get_name(), "data": self.data}
+
+
 class StateChangedEvent(ProcessEvent):
 
     def __init__(self, process, data):
         super().__init__(process, data)
+
+
+class OutputEvent(ProcessEvent):
+
+    def __init__(self, process, data):
+        super().__init__(process, data)
+
 
 class ProcessMonitor(object):
 
     def __init__(self):
         self._is_running = False
         self._processes = {}  # type: Dict[str, Process]
-        self._running_processes = set()  # type: Set[Process]
-        self._state_changed_queue = asyncio.Queue()
+        self._state_event_queue = asyncio.Queue()
+        self._output_event_queue = asyncio.Queue()
 
     async def register(self, name, command, as_process_group=True):
         if name in self._processes:
@@ -38,17 +49,6 @@ class ProcessMonitor(object):
         self._processes[name] = p
         return p
 
-    async def _handle_on_state_changed(self, process, state):
-        print(state)
-        if state == Process.RUNNING:
-            self._running_processes.add(process)
-
-        elif state == Process.ENDED and process in self._running_processes:
-            self._running_processes.remove(process)
-
-    def _on_output(self, line):
-        logger.debug(line)
-
     async def start(self, name):
         if name not in self._processes:
             logger.warning("No process with name '%s'", name)
@@ -60,8 +60,10 @@ class ProcessMonitor(object):
 
             return None
 
-        process.set_state_listener(lambda proc, state: self._state_changed_queue.put_nowait((proc, state)))
-        process.set_output_listener(self._on_output)
+        process.set_state_listener(
+            lambda proc, state: self._state_event_queue.put_nowait(StateChangedEvent(proc, state)))
+        process.set_output_listener(
+            lambda output: self._state_event_queue.put_nowait(OutputEvent(process, output.decode())))
         return process.start_as_task()
 
     async def stop(self, name):
@@ -72,19 +74,30 @@ class ProcessMonitor(object):
         process = self._processes[name]
         await process.stop()
 
-    def start_state_monitor_task(self):
-        self._state_monitor_task = asyncio.create_task(self._monitor())
-        return self._state_monitor_task
+    def start_monitor_tasks(self):
+        # TODO: combine output events?
+        self._output_event_task = asyncio.create_task(
+            self._process_queue(self._output_event_queue, self.on_output_event))
+        self._state_event_task = asyncio.create_task(self._process_queue(self._state_event_queue, self.on_state_event))
+        self._monitor_tasks = asyncio.gather(self._output_event_task, self._state_event_task)
+        return self._monitor_tasks
 
-    async def _monitor(self):
+    def on_state_event(self, event):
+        print("State event", event)
+
+    def on_output_event(self, event):
+        print("Output event", event)
+
+    async def _process_queue(self, queue: asyncio.Queue, handler):
         self._is_running = True
         while self._is_running:
-            process, state = await self._state_changed_queue.get()
-            await self._handle_on_state_changed(process, state)
+            event = await queue.get()
+            await handler(event)
 
     async def shutdown(self):
-        logger.info("Initiating shutdown, stopping %d running processes", len(self._running_processes))
-        running = self._running_processes.copy()
+        running = list(filter(lambda proc: proc.is_running(), self._processes.values()))
+        logger.info("Initiating shutdown, stopping %d running processes", len(running))
+
         for proc in running:
             logger.info("[ProcReg] Stopping process: %s", proc.get_name())
             await proc.stop()
@@ -92,9 +105,10 @@ class ProcessMonitor(object):
         # stop or cancel the monitor task
         self._is_running = False
         await asyncio.sleep(.1)
-        self._state_monitor_task.cancel()
+
+        self._monitor_tasks.cancel()
         try:
-            await self._state_monitor_task
+            await self._monitor_tasks
         except asyncio.CancelledError:
             pass
         logger.info("All processes stopped")
@@ -122,7 +136,7 @@ if __name__ == '__main__':
     loop.set_debug(True)
     loop.create_task(populate())
     try:
-        loop.run_until_complete(reg.start_state_monitor_task(loop))
+        loop.run_until_complete(reg.start_monitor_tasks())
     finally:
         loop.stop()
         loop.close()

@@ -4,7 +4,7 @@ import signal
 
 from websockets import WebSocketException
 
-from process_registry import ProcessMonitor
+from process_monitor import ProcessMonitor
 
 import asyncio
 import websockets
@@ -35,12 +35,12 @@ class WebsocketProcessMonitor(ProcessMonitor):
             logger.info("Client removed: %s", websocket)
 
     async def listen(self, host="127.0.0.1", port=8766):
-        self.start_state_monitor_task()
+        self.start_monitor_tasks()
 
         # run as long as the state monitor is running
         async with websockets.serve(self.__client_connected, host, port):
             try:
-                await self._state_monitor_task
+                await self._monitor_tasks
             except asyncio.CancelledError:
                 logger.info("State monitor task cancelled, stopping websocket server")
 
@@ -72,9 +72,10 @@ class WebsocketProcessMonitor(ProcessMonitor):
                 logger.info("WS write failed: %s", e)
                 # TODO(mark): I assume that handle_client will remove the failed websocket
 
-    async def _handle_on_state_changed(self, process, state):
-        await ProcessMonitor._handle_on_state_changed(self, process, state)
-        await self._write_all_clients(json.dumps({"name": process.get_name(), "state": state}))
+    async def on_state_event(self, event):
+        print("ev", event)
+        #await ProcessMonitor._handle_on_state_changed(self, process, state)
+        await self._write_all_clients(json.dumps(event.get_data()))
 
     async def _process_client_input(self, data):
         try:

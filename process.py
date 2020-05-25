@@ -162,7 +162,7 @@ class Process(object):
                 break
 
             if handler is not None:
-                await handler(line)
+                handler(line)
 
     def start_as_task(self):
         if self._state != Process.INITIALIZED:
