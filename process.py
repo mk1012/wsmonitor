@@ -29,6 +29,7 @@ class ProcessOutput(object):
 
 class Process(object):
     INITIALIZED = "initialized"
+    STARTING = "starting"
     RUNNING = "running"
     BEING_KILLED = "being_killed"
     ENDED = "ended"
@@ -169,6 +170,7 @@ class Process(object):
             logger.warning("Process cannot be started in state: %s", self._state)
             return None
 
+        self._state = self.STARTING  # change state to ensure single start
         self._process_task = asyncio.create_task(self._run_process())
         return self._process_task
 

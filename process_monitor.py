@@ -17,6 +17,8 @@ class ProcessEvent(object):
     def get_data(self):
         return {"__type__": self.__class__.__name__, "process": self.process.get_name(), "data": self.data}
 
+    def __str__(self):
+        return str(self.get_data())
 
 class StateChangedEvent(ProcessEvent):
 
@@ -63,7 +65,7 @@ class ProcessMonitor(object):
         process.set_state_listener(
             lambda proc, state: self._state_event_queue.put_nowait(StateChangedEvent(proc, state)))
         process.set_output_listener(
-            lambda output: self._state_event_queue.put_nowait(OutputEvent(process, output.decode())))
+            lambda output: self._output_event_queue.put_nowait(OutputEvent(process, output.decode())))
         return process.start_as_task()
 
     async def stop(self, name):
@@ -82,11 +84,11 @@ class ProcessMonitor(object):
         self._monitor_tasks = asyncio.gather(self._output_event_task, self._state_event_task)
         return self._monitor_tasks
 
-    def on_state_event(self, event):
+    async def on_state_event(self, event):
         print("State event", event)
 
-    def on_output_event(self, event):
-        print("Output event", event)
+    async def on_output_event(self, event):
+        pass #print("Output event", event)
 
     async def _process_queue(self, queue: asyncio.Queue, handler):
         self._is_running = True
