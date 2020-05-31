@@ -15,12 +15,15 @@ class ProcessData(object):
         self.state = None
         self.exit_code = None
 
-    def from_dict(self, data):
-        self.uid = data["uid"]
-        self.command = data["command"]
-        self.as_process_group = data["as_process_group"]
+    @staticmethod
+    def from_dict(data):
+        uid = data["uid"]
+        command = data["command"]
+        as_process_group = data["as_process_group"]
+        pdata = ProcessData(uid, command, as_process_group)
         if "state" in data:
-            self.state = data["state"]
+            pdata.state = data["state"]
+        return pdata
 
     def as_dict(self):
         return {"uid": self.uid, "command": self.command,

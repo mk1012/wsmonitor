@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
-
+import json
 import sys
+from json import JSONDecodeError
 
 from PySide2 import QtWebSockets
 from PySide2.QtCore import (QRect, QUrl)
 from PySide2.QtWidgets import *
 from gui.process_widget import ProcessListWidget
+from process_data import ProcessData
 
 
 class MainWindow(QMainWindow):
@@ -36,6 +38,26 @@ class MainWindow(QMainWindow):
 
     def on_message(self, message):
         print("text msg: ", message)
+        try:
+            json_data = json.loads(message)
+        except JSONDecodeError:
+            print("Invalid message: ", message)
+            return
+
+        typ = json_data["type"]
+        if typ == "state":
+            data = json_data["data"]
+            pdatas = set([ProcessData.from_dict(entry) for entry in data])
+            self.process_list.update_process_data(pdatas)
+        if typ == "process_state_changed":
+            state = json_data["data"]
+            uid = json_data["uid"]
+            self.process_list.update_single_process_state(uid, state)
+        if typ == "action_response":
+            response = json_data["data"]
+            uid = response["uid"]
+            result = response["result"]
+            self.process_list.on_action_completed(uid, result)
 
     def on_connected(self):
         print("connected")
@@ -47,9 +69,12 @@ class MainWindow(QMainWindow):
         self._ws_connected = False
         self.set_disconnected_ui()
 
-    def send_message(self):
-        print("client: send_message")
-        self.client.sendTextMessage("Mark")
+    def send_message(self, msg):
+        if not self._ws_connected:
+            print("CLIENT NOT CONENCTED!")
+            return
+        print("send_message", msg)
+        self.client.sendTextMessage(msg)
 
     def onPong(self, elapsedTime, payload):
         print("onPong - time: {} ; payload: {}".format(elapsedTime, payload))
@@ -83,14 +108,23 @@ class MainWindow(QMainWindow):
         self.txt_conenction.setPlaceholderText("ws://127.0.0.1:8766")
         self.txt_conenction.setText("ws://127.0.0.1:8766")
         self.btn_connect.setText("Connect")
+
+        self.process_list.action_requested.connect(self.on_action_requested)
+
         self.set_disconnected_ui()
+
+    def on_action_requested(self, uid, action):
+        print("New action request", uid, action)
+        self.send_message(json.dumps({"type": "action", "action": action, "uid": uid}))
 
     def set_disconnected_ui(self):
         self.process_list.setDisabled(True)
+        self.btn_connect.setDisabled(False)
         self.statusbar.showMessage("Disconnected. Connected to a websocket server")
 
     def set_connected_ui(self):
         self.process_list.setDisabled(False)
+        self.btn_connect.setDisabled(True)
         self.statusbar.showMessage("Connected.")
 
 

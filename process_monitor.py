@@ -4,6 +4,7 @@ import signal
 from typing import Dict, Union
 
 from process import Process
+from process_data import ProcessData
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -13,9 +14,10 @@ class ProcessEvent(object):
     def __init__(self, process, data):
         self.process = process
         self.data = data
+        self.type = self.__class__.__name__.lower()
 
     def get_data(self):
-        return {"__type__": self.__class__.__name__, "process": self.process.get_uid(), "data": self.data}
+        return {"type": self.type, "uid": self.process.get_uid(), "data": self.data}
 
     def __str__(self):
         return str(self.get_data())
@@ -25,6 +27,7 @@ class StateChangedEvent(ProcessEvent):
 
     def __init__(self, process, data):
         super().__init__(process, data)
+        self.type = "process_state_changed"
 
 
 class OutputEvent(ProcessEvent):
@@ -48,9 +51,13 @@ class ProcessMonitor(object):
             # TODO(mark): update command?
             return p
         logger.info("Registered new process %s", name)
-        p = Process(name, command, as_process_group)
+
+        p = Process(ProcessData(name, command, as_process_group))
         self._processes[name] = p
         return p
+
+    def as_json_data(self):
+        return [self._processes[key]._data.as_dict() for key in self._processes]
 
     async def start(self, name):
         # type: (str) -> Union[None, Process]

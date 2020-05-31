@@ -3,7 +3,7 @@ from typing import Dict, Set
 
 from PySide2.QtCore import Signal, Slot, Qt
 from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QLineEdit, QSizePolicy, QVBoxLayout, \
-    QScrollArea
+    QScrollArea, QSpacerItem
 
 from process_data import ProcessData
 
@@ -12,15 +12,23 @@ class ProcessWidget(QWidget):
     actionRequested = Signal(str, str)
 
     @Slot(str)
-    def on_request_completed(self, result_state):
-        print("Completed:", result_state)
-        self._set_state(result_state)
+    def on_request_completed(self, action_response):
+        print("Completed:", action_response)
+        self._disable_buttons(False)
 
     def on_update_process_data(self, process_data: ProcessData):
         print("Date update:", process_data)
-        self.__process_data = process_data
+
         self._set_state(process_data.state)
-        self.txt_command.setText(process_data.command)
+
+        # only update if not changed manually, i.e. __proc_data.cmd == text()
+        current_cmd = self.txt_command.text()
+        if current_cmd == "" or self.__process_data.command == current_cmd:
+            self.txt_command.setText(process_data.command)
+            self.txt_command.setStyleSheet("color: inherit;")
+        else:
+            self.txt_command.setStyleSheet("color: orange;")
+        self.__process_data = process_data
 
     def get_command_text(self):
         return self.txt_command.text()
@@ -39,7 +47,7 @@ class ProcessWidget(QWidget):
 
     def _set_state(self, state):
         self.__process_data.state = state
-        self.lbl_state.setText("State: %s"% state)
+        self.lbl_state.setText("State: %s" % state)
 
         is_running = state == ProcessData.RUNNING
         if is_running:
@@ -62,8 +70,8 @@ class ProcessWidget(QWidget):
         self.btn_restart.setObjectName("btn_restart")
         self.btn_start_stop = QPushButton(self, text="Start/Stop")
         self.btn_start_stop.setObjectName("btn_start_stop")
-        self.txt_command = QLineEdit(self)
-        self.txt_command.setPlaceholderText("Your command")
+        self.txt_command = QLabel(self)
+        #        self.txt_command.setPlaceholderText("Your command")
         self.txt_command.setObjectName("txt_command")
 
         self.lbl_uid = QLabel(self, text="ID: %s" % self.__process_data.uid)
@@ -87,6 +95,7 @@ class ProcessWidget(QWidget):
 
 
 class ProcessListWidget(QScrollArea):
+    action_requested = Signal(str, str)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -99,6 +108,7 @@ class ProcessListWidget(QScrollArea):
 
         self.lbl_default = QLabel(text="No processes found")
         self.layout.addWidget(self.lbl_default)
+        self.layout.addStretch()
 
         # Configure ScrollArea
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -106,19 +116,21 @@ class ProcessListWidget(QScrollArea):
         self.setWidgetResizable(True)
         self.setWidget(self.main_widget)
 
-    def on_action_requested(self, p_uid, action):
-        print("Action requested: ", p_uid, action)
-
-    @Slot(str)
+    @Slot(str, str)
     def on_action_completed(self, p_uid, action):
         print("Action completed: ", p_uid, action)
         self.process_widget_map[p_uid].on_request_completed(action)
+
+    def update_single_process_state(self, uid, state):
+        self.process_widget_map[uid]._set_state(state)
+        # TODO(mark): update process data sets with new data
+
 
     def update_process_data(self, updated_process_data: Set[ProcessData]):
         known_processes = updated_process_data & self.process_data
         new_processes = updated_process_data - self.process_data
         unknown_processes = updated_process_data - self.process_data
-
+        # TODO(mark): update process data sets with new data
         for known_process in known_processes:
             widget = self.process_widget_map[known_process.uid]
             widget.on_update_process_data(known_process)
@@ -126,8 +138,8 @@ class ProcessListWidget(QScrollArea):
         for new_process in new_processes:
             widget = ProcessWidget(new_process)
             self.process_widget_map[new_process.uid] = widget
-            widget.actionRequested.connect(self.on_action_requested)
-            self.layout.addWidget(widget)
+            widget.actionRequested.connect(self.action_requested)
+            self.layout.insertWidget(0, widget)
 
         # TODO(mark): unknown processes
 
