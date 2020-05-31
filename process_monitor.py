@@ -3,7 +3,7 @@ import logging
 import signal
 from typing import Dict, Union
 
-from gui.process_widget import Process
+from process import Process
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -15,7 +15,7 @@ class ProcessEvent(object):
         self.data = data
 
     def get_data(self):
-        return {"__type__": self.__class__.__name__, "process": self.process.get_name(), "data": self.data}
+        return {"__type__": self.__class__.__name__, "process": self.process.get_uid(), "data": self.data}
 
     def __str__(self):
         return str(self.get_data())
@@ -79,14 +79,17 @@ class ProcessMonitor(object):
         process = self._processes[name]
         await process.stop()
 
-    def start_monitor_tasks(self):
+    def get_monitor_tasks(self):
 
         # TODO: combine output events?
         self._output_event_task = asyncio.create_task(
             self._process_queue(self._output_event_queue, self.on_output_event))
         self._state_event_task = asyncio.create_task(self._process_queue(self._state_event_queue, self.on_state_event))
-        self._monitor_tasks = asyncio.gather(self._output_event_task, self._state_event_task)
-        return self._monitor_tasks
+        return [self._output_event_task, self._state_event_task]
+
+    def start_monitor_tasks(self):
+        tasks = self.get_monitor_tasks()
+        self._monitor_tasks = asyncio.gather(*tasks)
 
     async def on_state_event(self, event):
         print("State event", event)
@@ -105,7 +108,7 @@ class ProcessMonitor(object):
         logger.info("Initiating shutdown, stopping %d running processes", len(running))
 
         for process in running:
-            logger.info("[ProcReg] Stopping process: %s", process.get_name())
+            logger.info("[ProcReg] Stopping process: %s", process.get_uid())
             await process.stop()
 
         # stop or cancel the monitor tasks

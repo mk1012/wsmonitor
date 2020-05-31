@@ -8,6 +8,8 @@ from asyncio import CancelledError
 from asyncio.subprocess import STDOUT, PIPE
 from typing import Union, Callable, Coroutine
 
+from process_data import ProcessData
+
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(lineno)d -  %(message)s")
 logger = logging.getLogger(__name__)
@@ -28,25 +30,13 @@ class ProcessOutput(object):
 
 
 class Process(object):
-    INITIALIZED = "initialized"
-    STARTING = "starting"
-    RUNNING = "running"
-    BEING_KILLED = "being_killed"
-    ENDED = "ended"
-
-    def __init__(self, uid: str, command, as_process_group=False):
-        self._uid = uid
-        self._command = command
-        self._exit_code = None
+    def __init__(self, process_data: ProcessData):
+        self._data = process_data
         self._asyncio_process = None  # type: Union[asyncio.subprocess.Process, None]
-        self._as_process_group = as_process_group
+
         self._process_task = None  # type: Union[asyncio.Task, None]
-        self._state = Process.INITIALIZED
         self._state_change_listener = None
         self._output_listener = None
-
-    def __hash__(self):
-        return self._uid.__hash__()
 
     def set_state_listener(self, listener):
         self._state_change_listener = listener
@@ -56,16 +46,16 @@ class Process(object):
 
     async def _run_process(self):
         preexec_fn = None
-        if self._as_process_group:
+        if self._data.as_process_group:
             # Run process in a new process group
             # https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
             preexec_fn = os.setsid
 
-        logger.debug("Process[%s]: starting", self._uid)
+        logger.debug("Process[%s]: starting", self._data.uid)
         self._asyncio_process = await asyncio.create_subprocess_shell(
-            self._command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn)
+            self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn)
 
-        self._state_changed(Process.RUNNING)
+        self._state_changed(ProcessData.RUNNING)
 
         # start the read tasks and wait for them to complete
         try:
@@ -73,33 +63,31 @@ class Process(object):
                 self._read_stream(self._asyncio_process.stdout, self._output_listener),
                 self._read_stream(self._asyncio_process.stderr, self._output_listener)
             ])
-            self._exit_code = await self._asyncio_process.wait()
+            self._data.exit_code = await self._asyncio_process.wait()
 
         except CancelledError:
-            logger.warning("Process[%s]: Caught task CancelledError! Stopping process instead", self._uid)
+            logger.warning("Process[%s]: Caught task CancelledError! Stopping process instead", self.get_uid())
             await self.stop()
+            self._data.ensure_exit_code(-1)
 
-            if self._exit_code is None:  # ensure there is an exit code
-                self._exit_code = -1
+        logger.debug("Process[%s]: has exited with: %d", self.get_uid(), self._data.exit_code)
 
-        logger.debug("Process[%s]: has exited with: %d", self._uid, self._exit_code)
-
-        self._state_changed(Process.ENDED)
-        return self._exit_code
+        self._state_changed(ProcessData.ENDED)
+        return self._data.exit_code
 
     async def stop(self, int_timeout=2, term_timeout=2):
         if not self.is_running():
-            logger.warning("Process[%s]: Is not running, cannot stop", self._uid)
+            logger.warning("Process[%s]: Is not running, cannot stop", self.get_uid())
             return
 
-        logger.debug("Process[%s](%d): stopping...", self._uid, self._asyncio_process.pid)
-        self._state_changed(Process.BEING_KILLED)
+        logger.debug("Process[%s](%d): stopping...", self.get_uid(), self._asyncio_process.pid)
+        self._state_changed(ProcessData.BEING_KILLED)
         try:
 
             # deal with process or process group
             kill_fn = os.kill
             pid = self._asyncio_process.pid
-            if self._as_process_group:
+            if self._data.as_process_group:
                 pid = os.getpgid(pid)
                 kill_fn = os.killpg
 
@@ -121,7 +109,7 @@ class Process(object):
                 if self.has_exit_code():
                     return
 
-            logger.debug("Process[%s]: Stopping, escalating to SIGTERM", self._uid)
+            logger.debug("Process[%s]: Stopping, escalating to SIGTERM", self.get_uid())
             kill_fn(pid, signal.SIGTERM)
             while term_timeout > 0:
                 await asyncio.sleep(min(sleep_interval, term_timeout))
@@ -130,7 +118,7 @@ class Process(object):
                 if self.has_exit_code():
                     return
 
-            logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self._uid)
+            logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self.get_uid())
             kill_fn(pid, signal.SIGKILL)
             # SIGKILL cannot be avoided
             while not self.has_exit_code():
@@ -149,9 +137,8 @@ class Process(object):
         await self._process_task
 
         # reset process state
-        self._exit_code = None
+        self._data.reset()
         self._asyncio_process = None
-        self._state = Process.INITIALIZED
         self._process_task = None
         return self.start_as_task()
 
@@ -166,11 +153,11 @@ class Process(object):
                 handler(line)
 
     def start_as_task(self):
-        if self._state != Process.INITIALIZED:
+        if self._data.is_in_state(ProcessData.INITIALIZED):
             logger.warning("Process cannot be started in state: %s", self._state)
             return None
 
-        self._state = self.STARTING  # change state to ensure single start
+        self._data.state = ProcessData.STARTING  # change state to ensure single start
         self._process_task = asyncio.create_task(self._run_process())
         return self._process_task
 
@@ -181,18 +168,21 @@ class Process(object):
         return self._exit_code is not None
 
     def _state_changed(self, state):
-        self._state = state
+        self._data.state = state
         # TODO: should it be run in separate task?
         # By not awaiting this function users can only call blocking code
         # What happens if I receive a RUNNING event and request stop?
         if self._state_change_listener is not None:
             self._state_change_listener(self, state)
 
+    def __hash__(self):
+        return self._data.uid.__hash__()
+
     def is_running(self):
-        return self._state == Process.RUNNING
+        return self._data.state == ProcessData.RUNNING
 
     def has_completed(self):
-        return self._state == Process.ENDED
+        return self._data.state == ProcessData.ENDED
 
-    def get_name(self):
-        return self._uid
+    def get_uid(self):
+        return self._data.uid

@@ -4,6 +4,7 @@ from PySide2 import QtCore, QtWebSockets, QtNetwork
 from PySide2.QtCore import QUrl, QCoreApplication, QTimer
 from PySide2.QtWidgets import QApplication
 
+
 class MyServer(QtCore.QObject):
     def __init__(self, parent):
         super().__init__(parent)
@@ -50,7 +51,7 @@ class MyServer(QtCore.QObject):
             # self.clientConnection.sendTextMessage(message)
 
     def processBinaryMessage(self, message):
-        print("b:",message)
+        print("b:", message)
         if self.clientConnection:
             self.clientConnection.sendBinaryMessage(message)
 
@@ -65,7 +66,7 @@ class Client(QtCore.QObject):
     def __init__(self, parent):
         super().__init__(parent)
 
-        self.client =  QtWebSockets.QWebSocket("",QtWebSockets.QWebSocketProtocol.Version13,None)
+        self.client = QtWebSockets.QWebSocket("", QtWebSockets.QWebSocketProtocol.Version13, None)
         self.client.error.connect(self.error)
 
         self.client.open(QUrl("ws://127.0.0.1:8766"))
@@ -89,6 +90,7 @@ class Client(QtCore.QObject):
     def close(self):
         self.client.close()
 
+
 def quit_app():
     print("timer timeout - exiting")
     QCoreApplication.quit()
@@ -97,15 +99,14 @@ def quit_app():
 if __name__ == '__main__':
     app = QApplication(sys.argv)
 
-    #serverObject = QtWebSockets.QWebSocketServer('My Socket', QtWebSockets.QWebSocketServer.NonSecureMode)
-    #server = MyServer(serverObject)
-    #serverObject.closed.connect(app.quit)
+    # serverObject = QtWebSockets.QWebSocketServer('My Socket', QtWebSockets.QWebSocketServer.NonSecureMode)
+    # server = MyServer(serverObject)
+    # serverObject.closed.connect(app.quit)
 
     client = Client(app)
 
     QTimer.singleShot(2000, client.do_ping)
     QTimer.singleShot(3000, client.send_message)
     QTimer.singleShot(25000, quit_app)
-
 
     app.exec_()

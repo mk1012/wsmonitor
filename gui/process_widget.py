@@ -5,40 +5,7 @@ from PySide2.QtCore import Signal, Slot, Qt
 from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QLineEdit, QSizePolicy, QVBoxLayout, \
     QScrollArea
 
-
-class ProcessData(object):
-    UNKNONW = "unknown"
-    RUNNING = "running"
-    STOPPED = "stopped"
-
-    def __init__(self, uid: str, command: str, as_process_group=False):
-        self.uid = uid
-        self.command = command
-        self.as_process_group = as_process_group
-        self.state = None
-
-    def from_dict(self, data):
-        self.uid = data["uid"]
-        self.command = data["command"]
-        self.as_process_group = data["as_process_group"]
-        if "state" in data:
-            self.state = data["state"]
-
-    def as_dict(self):
-        return {"uid": self.uid, "command": self.command,
-                "as_process_group": self.as_process_group,
-                "type": self.__class__.__name__}
-
-    def __str__(self):
-        return str(self.as_dict())
-
-    def __hash__(self):
-        return self.uid.__hash__()
-
-    def __eq__(self, other):
-        if not isinstance(other, ProcessData):
-            return False
-        return self.uid == other.uid
+from process_data import ProcessData
 
 
 class ProcessWidget(QWidget):

@@ -17,6 +17,7 @@ class WebsocketProcessMonitor(ProcessMonitor):
 
     def __init__(self):
         super().__init__()
+        self.periodic_update_sleep_duration = 5
         self.known_actions = {
             "register": {"keys": ["name", "cmd"], "fn": self.register},
             "start": {"keys": ["name"], "fn": self.start},
@@ -27,6 +28,7 @@ class WebsocketProcessMonitor(ProcessMonitor):
         self._shutdown_future = asyncio.get_event_loop().create_future()
 
     async def __client_connected(self, websocket, path):
+        # This is the listen()-handler, is each run in its own task?
         self.clients.add(websocket)
         logger.info("Client added: %s", websocket)
 
@@ -35,6 +37,20 @@ class WebsocketProcessMonitor(ProcessMonitor):
         finally:
             self.clients.remove(websocket)
             logger.info("Client removed: %s", websocket)
+
+    async def _periodic_update(self):
+        self._is_running = True
+        while self._is_running:
+            await asyncio.sleep(self.periodic_update_sleep_duration)
+            print("Periodic update")
+            state_data = "test1234"
+            await self._write_all_clients(state_data)
+
+    def get_monitor_tasks(self):
+        tasks = ProcessMonitor.get_monitor_tasks(self)
+        self._periodic_state_update_task = asyncio.create_task(self._periodic_update())
+        tasks.append(self._periodic_state_update_task)
+        return tasks
 
     async def listen(self, host="127.0.0.1", port=8766):
         self.start_monitor_tasks()
@@ -52,11 +68,15 @@ class WebsocketProcessMonitor(ProcessMonitor):
         while self._is_running:
             try:
                 data = await websocket.recv()
+
+                result = await self._process_client_input(data)
+                if result is not None:
+                    await websocket.send(result)
+
             except WebSocketException as e:
                 logger.info("WS read failed: %s", e)
                 break
 
-            await self._process_client_input(data)
             # await asyncio.sleep(.1)
 
     async def _on_output(self, line):
@@ -76,27 +96,31 @@ class WebsocketProcessMonitor(ProcessMonitor):
 
     async def on_state_event(self, event):
         print("ev", event)
-        #await ProcessMonitor._handle_on_state_changed(self, process, state)
+        # await ProcessMonitor._handle_on_state_changed(self, process, state)
         await self._write_all_clients(json.dumps(event.get_data()))
 
     async def _process_client_input(self, data):
         try:
+            # TODO(mark): validate length of data
             jdata = json.loads(data)
         except:
-            logger.warning("Received invalid input: %s", data)
-            return
+            return self.error_response("Received invalid input: %s" % data)
 
         action_name = jdata.get("action", None)
         if action_name not in self.known_actions:
-            logger.warning("Invalid action: %s", action_name)
-            return
+            return self.error_response("Invalid action: %s" % action_name)
 
         action = self.known_actions[action_name]
         has_keys = all(map(lambda key: key in jdata, action["keys"]))
         if not has_keys:
-            logger.warning("Not all required keys are set: %s", action["keys"])
+            return self.error_response("Not all required keys are set: %s" % action["keys"])
 
         return await action["fn"](*(jdata[key] for key in action["keys"]))
+
+    def error_response(self, msg: str):
+        logger.warning(msg)
+        return str({"type": "error", "data": msg})
+
 
 
 def main():
