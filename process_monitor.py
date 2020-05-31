@@ -1,9 +1,9 @@
 import asyncio
 import logging
 import signal
-from typing import Dict, Set, List
+from typing import Dict, Union
 
-from process import Process
+from gui.process_widget import Process
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -19,6 +19,7 @@ class ProcessEvent(object):
 
     def __str__(self):
         return str(self.get_data())
+
 
 class StateChangedEvent(ProcessEvent):
 
@@ -52,6 +53,8 @@ class ProcessMonitor(object):
         return p
 
     async def start(self, name):
+        # type: (str) -> Union[None, Process]
+
         if name not in self._processes:
             logger.warning("No process with name '%s'", name)
             return None
@@ -59,13 +62,13 @@ class ProcessMonitor(object):
         process = self._processes[name]
         if process.is_running():
             logger.warning("Process '%s' is already running", name)
-
             return None
 
         process.set_state_listener(
             lambda proc, state: self._state_event_queue.put_nowait(StateChangedEvent(proc, state)))
         process.set_output_listener(
             lambda output: self._output_event_queue.put_nowait(OutputEvent(process, output.decode())))
+
         return process.start_as_task()
 
     async def stop(self, name):
@@ -77,6 +80,7 @@ class ProcessMonitor(object):
         await process.stop()
 
     def start_monitor_tasks(self):
+
         # TODO: combine output events?
         self._output_event_task = asyncio.create_task(
             self._process_queue(self._output_event_queue, self.on_output_event))
@@ -88,7 +92,7 @@ class ProcessMonitor(object):
         print("State event", event)
 
     async def on_output_event(self, event):
-        pass #print("Output event", event)
+        pass  # print("Output event", event)
 
     async def _process_queue(self, queue: asyncio.Queue, handler):
         self._is_running = True
@@ -100,11 +104,11 @@ class ProcessMonitor(object):
         running = list(filter(lambda proc: proc.is_running(), self._processes.values()))
         logger.info("Initiating shutdown, stopping %d running processes", len(running))
 
-        for proc in running:
-            logger.info("[ProcReg] Stopping process: %s", proc.get_name())
-            await proc.stop()
+        for process in running:
+            logger.info("[ProcReg] Stopping process: %s", process.get_name())
+            await process.stop()
 
-        # stop or cancel the monitor task
+        # stop or cancel the monitor tasks
         self._is_running = False
         await asyncio.sleep(.1)
 

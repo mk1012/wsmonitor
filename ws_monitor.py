@@ -21,8 +21,8 @@ class WebsocketProcessMonitor(ProcessMonitor):
             "register": {"keys": ["name", "cmd"], "fn": self.register},
             "start": {"keys": ["name"], "fn": self.start},
             "stop": {"keys": ["name"], "fn": self.stop}
-
         }
+
         self.clients = set()
         self._shutdown_future = asyncio.get_event_loop().create_future()
 
