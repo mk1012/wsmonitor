@@ -4,7 +4,8 @@ import sys
 from json import JSONDecodeError
 
 from PySide2 import QtWebSockets
-from PySide2.QtCore import (QRect, QUrl)
+from PySide2.QtCore import (QRect, QUrl, Qt)
+from PySide2.QtGui import QTextCursor
 from PySide2.QtWidgets import *
 from gui.process_widget import ProcessListWidget
 from process_data import ProcessData
@@ -58,6 +59,9 @@ class MainWindow(QMainWindow):
             uid = response["uid"]
             result = response["result"]
             self.process_list.on_action_completed(uid, result)
+        if typ == "outputevent":
+            self.txt_output.moveCursor(QTextCursor.End)
+            self.txt_output.insertPlainText(json_data["data"])
 
     def on_connected(self):
         print("connected")
@@ -97,8 +101,25 @@ class MainWindow(QMainWindow):
         self.layout_connection.addWidget(self.txt_conenction)
         self.layout_connection.addWidget(self.btn_connect)
         self.process_list = ProcessListWidget()
+
+        self.txt_output = QTextEdit()
+        self.txt_output.setMinimumWidth(100)
+        self.process_list.setMinimumWidth(100)
+
+        self.splitter = QSplitter()
+        sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.splitter.sizePolicy().hasHeightForWidth())
+        self.splitter.setSizePolicy(sizePolicy)
+        self.splitter.setOrientation(Qt.Horizontal)
+
+
         self.main_layout.addLayout(self.layout_connection)
-        self.main_layout.addWidget(self.process_list)
+        self.splitter.addWidget(self.process_list)
+        self.splitter.addWidget(self.txt_output)
+        self.main_layout.addWidget(self.splitter)
+
         self.main_widget.setLayout(self.main_layout)
         self.setCentralWidget(self.main_widget)
         self.statusbar = QStatusBar(self)

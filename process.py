@@ -150,6 +150,7 @@ class Process(object):
                 break
 
             if handler is not None:
+                print("line", line)
                 handler(line)
 
     def start_as_task(self):
@@ -165,7 +166,7 @@ class Process(object):
         return self._process_task
 
     def has_exit_code(self):
-        return self._exit_code is not None
+        return self._data.exit_code is not None
 
     def _state_changed(self, state):
         self._data.state = state

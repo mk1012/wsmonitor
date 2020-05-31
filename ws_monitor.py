@@ -150,7 +150,7 @@ def main():
     wpm = WebsocketProcessMonitor()
     loop.set_debug(True)
 
-    loop.create_task(wpm.register("test", "ls *", False))
+    loop.create_task(wpm.register("test", "ping 8.8.8.8", False))
 
     def shutdown_handler(_1, _2):
         loop.create_task(wpm.shutdown())
