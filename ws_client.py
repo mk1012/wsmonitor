@@ -9,11 +9,11 @@ async def hello():
     async with websockets.connect(uri) as websocket:
         data = json.dumps({"cmd": "source ~/Arbeit_IPR/ws/devel/setup.bash && roslaunch rll_move move_iface.launch", "action": "register", "name": "Mark2"})
         await websocket.send(data)
-        data = json.dumps({"name": "Mark2", "action": "start"})
+        data = json.dumps({"uid": "test", "action": "start"})
         await websocket.send(data)
-        data = json.dumps({"name": "Mark2", "action": "stop"})
+        data = json.dumps({"uid": "test", "action": "stop"})
         await websocket.send(data)
-        data = json.dumps({"name": "Mark2", "action": "start"})
+        data = json.dumps({"uid": "test", "action": "start"})
         await websocket.send(data)
         while True:
             data = await websocket.recv()

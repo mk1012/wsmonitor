@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import signal
+from asyncio.tasks import Task
 from typing import Dict, Union
 
 from process import Process
@@ -44,6 +45,8 @@ class ProcessMonitor(object):
         self._state_event_queue = asyncio.Queue()
         self._output_event_queue = asyncio.Queue()
 
+        self._monitoring_tasks_task = None  # type: Union[Task, None]
+
     async def register(self, name, command, as_process_group=True):
         if name in self._processes:
             logger.warning("Process with name '%s' already known", name)
@@ -59,17 +62,15 @@ class ProcessMonitor(object):
     def as_json_data(self):
         return [self._processes[key]._data.as_dict() for key in self._processes]
 
-    async def start(self, name):
-        # type: (str) -> Union[None, Process]
+    def start(self, uid):
+        # type: (str) -> Union[str, Process]
 
-        if name not in self._processes:
-            logger.warning("No process with name '%s'", name)
-            return None
+        if uid not in self._processes:
+            return "No process with name '%s'" % uid
 
-        process = self._processes[name]
+        process = self._processes[uid]
         if process.is_running():
-            logger.warning("Process '%s' is already running", name)
-            return None
+            return "Process '%s' is already running" % uid
 
         process.set_state_listener(
             lambda proc, state: self._state_event_queue.put_nowait(StateChangedEvent(proc, state)))
@@ -80,23 +81,21 @@ class ProcessMonitor(object):
 
     async def stop(self, name):
         if name not in self._processes:
-            logger.warning("No process with name '%s'", name)
-            return
+            return "No process with name '%s'" % name
 
         process = self._processes[name]
-        await process.stop()
+        return await process.stop()
 
-    def get_monitor_tasks(self):
-
+    def _get_monitor_tasks(self):
         # TODO: combine output events?
-        self._output_event_task = asyncio.create_task(
-            self._process_queue(self._output_event_queue, self.on_output_event))
-        self._state_event_task = asyncio.create_task(self._process_queue(self._state_event_queue, self.on_state_event))
-        return [self._output_event_task, self._state_event_task]
+        state_task = asyncio.create_task(self._process_queue(self._state_event_queue, self.on_state_event))
+        output_task = asyncio.create_task(self._process_queue(self._output_event_queue, self.on_output_event))
+        return [state_task, output_task]
 
     def start_monitor_tasks(self):
-        tasks = self.get_monitor_tasks()
-        self._monitor_tasks = asyncio.gather(*tasks)
+        tasks = self._get_monitor_tasks()
+        self._monitoring_tasks_task = asyncio.gather(*tasks)
+        return self._monitoring_tasks_task
 
     async def on_state_event(self, event):
         print("State event", event)
@@ -116,15 +115,15 @@ class ProcessMonitor(object):
 
         for process in running:
             logger.info("[ProcReg] Stopping process: %s", process.get_uid())
-            await process.stop()
+            await process.stop()  # will cancel all process tasks as well
 
         # stop or cancel the monitor tasks
         self._is_running = False
         await asyncio.sleep(.1)
 
-        self._monitor_tasks.cancel()
+        self._monitoring_tasks_task.cancel()
         try:
-            await self._monitor_tasks
+            await self._monitoring_tasks_task
         except asyncio.CancelledError:
             pass
         logger.info("All processes stopped")

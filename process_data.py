@@ -1,5 +1,5 @@
 class ProcessData(object):
-    UNKNONW = "unknown"
+    UNKNOWN = "unknown"
     RUNNING = "running"
     STOPPED = "stopped"
 
@@ -12,7 +12,7 @@ class ProcessData(object):
         self.uid = uid
         self.command = command
         self.as_process_group = as_process_group
-        self.state = None
+        self.state = ProcessData.INITIALIZED
         self.exit_code = None
 
     @staticmethod

@@ -1,11 +1,9 @@
 import json
 import logging
 import signal
-from typing import Union, Dict
+from typing import Union, Dict, Set, List
 
 from websockets import WebSocketException
-
-from process_monitor import ProcessMonitor
 
 import asyncio
 import websockets
@@ -14,87 +12,80 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class WebsocketProcessMonitor(ProcessMonitor):
+class ClientConnection():
+
+    def __init__(self, websocket):
+        self.websocket = websocket
+        self.is_active = True
+
+    def loop(self):
+        pass
+
+
+class ClientAction(object):
+
+    def __init__(self, name, keys: List[str], func):
+        self.name = name
+        self.keys = keys
+        self.func = func
+
+    def keys_match(self, keys: Set[str]):
+        return all(map(lambda key: key in keys, self.keys))
+
+
+class WebsocketControl:
 
     def __init__(self):
         super().__init__()
         self.periodic_update_sleep_duration = 10
-        self.known_actions = {
-            "register": {"keys": ["uid", "cmd"], "fn": self.register},
-            "start": {"keys": ["uid"], "fn": self.start_action},
-            "stop": {"keys": ["uid"], "fn": self.stop}
-        }
+        self.known_actions = {}  # type: Dict[str, ClientAction]
 
         self.clients = set()
         self._shutdown_future = asyncio.get_event_loop().create_future()
 
-    async def start_action(self, uid):
-        await self.start(uid)
-        return self.format_response("action_response", {"result": "started", "uid": uid})
-
-    async def __client_connected(self, websocket, path):
-        # This is the listen()-handler, is each run in its own task?
-        self.clients.add(websocket)
-        logger.info("Client added: %s", websocket)
-
-        try:
-            await self.handle_client(websocket)
-        finally:
-            self.clients.remove(websocket)
-            logger.info("Client removed: %s", websocket)
-
-    async def _periodic_update_func(self):
-        self._is_running = True
-        while self._is_running:
-            await asyncio.sleep(self.periodic_update_sleep_duration)
-            print("Periodic update")
-            state_data = self.state_response(self.as_json_data())  # json.dumps
-            await self._write_all_clients(state_data)
-
-    def get_monitor_tasks(self):
-        tasks = ProcessMonitor.get_monitor_tasks(self)
-        self._periodic_state_update_task = asyncio.create_task(self._periodic_update_func())
-        tasks.append(self._periodic_state_update_task)
-        return tasks
-
     async def listen(self, host="127.0.0.1", port=8766):
-        self.start_monitor_tasks()
+        listen_while_future = self.get_server_loop_task()
 
-        # run as long as the state monitor is running
+        # run as long as future is not finished. If the with statement is done
+        # all connections will be automatically closed
         async with websockets.serve(self.__client_connected, host, port):
             try:
-                await self._monitor_tasks
+                await listen_while_future
             except asyncio.CancelledError:
                 logger.info("State monitor task cancelled, stopping websocket server")
 
         logger.info("Websocket server stopped")
 
-    async def handle_client(self, websocket: websockets.WebSocketServerProtocol):
-        # Send initial information
+    async def __client_connected(self, websocket, path):
+        # TODO(mark) is every listen()-invocation, run in its own task?
+        self.clients.add(websocket)
+        logger.info("Client added: %s", websocket)
+
         try:
-            await websocket.send(self.state_response(self.as_json_data()))
-        except:
-            return
+            await self.__client_loop_may_throw(websocket)
+        except WebSocketException as e:
+            logger.info("WebSocket connection error: %s", e)
 
-        while self._is_running:
-            try:
-                data = await websocket.recv()
+        finally:
+            self.clients.remove(websocket)
+            logger.info("Client removed: %s", websocket)
 
-                result = await self._process_client_input(data)
-                if result is not None:
-                    print("res: ", result)
-                    await websocket.send(result)
+    async def welcome_client(self, websocket):
+        pass
 
-            except WebSocketException as e:
-                logger.info("WS read failed: %s", e)
-                break
+    async def __client_loop_may_throw(self, websocket: websockets.WebSocketServerProtocol):
+        # Send initial information
+        await self.welcome_client(websocket)
 
-            # await asyncio.sleep(.1)
+        while True:
+            data = await websocket.recv()  # raises on close/error
 
-    async def _on_output(self, line):
-        await self._write_all_clients(line)
+            result = await self._process_client_input(data)
+            if result is not None:
+                logger.info("res: %s", result)
+                await websocket.send(result)
 
-    async def _write_all_clients(self, line):
+    async def broadcast(self, line):
         # TODO: this blocks the process processing application!
         # we should probaly put state change events in a queue and consume
         # the events!
@@ -106,43 +97,36 @@ class WebsocketProcessMonitor(ProcessMonitor):
                 logger.info("WS write failed: %s", e)
                 # TODO(mark): I assume that handle_client will remove the failed websocket
 
-    async def on_state_event(self, event):
-        print("ev", event)
-        # await ProcessMonitor._handle_on_state_changed(self, process, state)
-        await self._write_all_clients(json.dumps(event.get_data()))
-
-    async def on_output_event(self, event):
-        await self._write_all_clients(json.dumps(event.get_data()))
-
     async def _process_client_input(self, data):
         try:
-            # TODO(mark): validate length of data
             jdata = json.loads(data)
         except:
-            return self.error_response("Received invalid input: %s" % data)
+            return self.error_response("invalid", "Received invalid input: %s" % data)
 
         action_name = jdata.get("action", None)
         if action_name not in self.known_actions:
-            return self.error_response("Invalid action: %s" % action_name)
+            return self.error_response(action_name, "Invalid action: %s" % action_name)
 
         action = self.known_actions[action_name]
-        has_keys = all(map(lambda key: key in jdata, action["keys"]))
-        if not has_keys:
-            return self.error_response("Not all required keys are set: %s" % action["keys"])
 
-        return await action["fn"](*(jdata[key] for key in action["keys"]))
+        if not action.keys_match(jdata.keys()):
+            return self.error_response(action_name, "Not all required keys are set: %s" % action.keys)
 
-    def error_response(self, msg: str):
-        logger.warning(msg)
-        return json.dumps({"type": "error", "data": msg})
+        return await action.func(*(jdata[key] for key in action.keys))
 
-    def state_response(self, msg: str):
-        logger.warning(msg)
-        return json.dumps({"type": "state", "data": msg})
-
-    def format_response(self, type: str, data: Union[Dict, str]):
+    def format_response(self, success: bool, action: str, data: Union[Dict, str]):
         logger.warning(data)
-        return json.dumps({"type": type, "data": data})
+        return json.dumps({"type": "response", "data": {"action": action, "success": success, "data": data}})
+
+    def error_response(self, action: str, msg: str):
+        return self.format_response(False, action, msg)
+
+    def state_response(self, data: str):
+        logger.warning(data)
+        return json.dumps({"type": "event", "data": {"type": "state", "data": data}})
+
+    def get_server_loop_task(self):
+        raise NotImplementedError()
 
 
 def main():

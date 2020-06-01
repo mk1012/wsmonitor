@@ -76,14 +76,15 @@ class Process(object):
         return self._data.exit_code
 
     async def stop(self, int_timeout=2, term_timeout=2):
+        # type: (int, int) -> Union[str, int]
+
         if not self.is_running():
-            logger.warning("Process[%s]: Is not running, cannot stop", self.get_uid())
-            return
+            return "Process[%s]: Is not running, cannot stop" % self.get_uid()
 
         logger.debug("Process[%s](%d): stopping...", self.get_uid(), self._asyncio_process.pid)
         self._state_changed(ProcessData.BEING_KILLED)
-        try:
 
+        try:
             # deal with process or process group
             kill_fn = os.kill
             pid = self._asyncio_process.pid
@@ -98,7 +99,7 @@ class Process(object):
             # NOTE: we check for the exit code, which is set at the end of start
             # _run_process and should indicate that the process has truly exited
             if self.has_exit_code():
-                return
+                return self.exit_code()
 
             # sleep in chunks and test if process has stopped
             sleep_interval = .5
@@ -107,7 +108,7 @@ class Process(object):
                 int_timeout -= sleep_interval
 
                 if self.has_exit_code():
-                    return
+                    return self.exit_code()
 
             logger.debug("Process[%s]: Stopping, escalating to SIGTERM", self.get_uid())
             kill_fn(pid, signal.SIGTERM)
@@ -116,7 +117,7 @@ class Process(object):
                 term_timeout -= sleep_interval
 
                 if self.has_exit_code():
-                    return
+                    return self.exit_code()
 
             logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self.get_uid())
             kill_fn(pid, signal.SIGKILL)
@@ -125,9 +126,13 @@ class Process(object):
                 await asyncio.sleep(.01)
 
         except ProcessLookupError as ple:
-            logger.warning("Failed to find process %s", ple)
+            msg = "Failed to find process %s" % self.get_uid()
+            logger.warning(msg, exc_info=ple)
+            return msg
+
         except OSError as e:
-            logger.debug("Exception stopping process: %s", e)
+            logger.warning("Exception stopping process", exc_info=e)
+            return "Exception while stopping process %s" % e.__class__.__name__
 
     async def restart(self):
         await self.stop()
@@ -154,9 +159,11 @@ class Process(object):
                 handler(line)
 
     def start_as_task(self):
-        if self._data.is_in_state(ProcessData.INITIALIZED):
-            logger.warning("Process cannot be started in state: %s", self._state)
-            return None
+        print(self._data)
+        if not self._data.is_in_state(ProcessData.INITIALIZED):
+            msg = "Process cannot be started in state: %s" % self._data.state
+            logger.warning(msg)
+            return msg
 
         self._data.state = ProcessData.STARTING  # change state to ensure single start
         self._process_task = asyncio.create_task(self._run_process())
@@ -167,6 +174,10 @@ class Process(object):
 
     def has_exit_code(self):
         return self._data.exit_code is not None
+
+    def exit_code(self):
+        # type: () -> int
+        return self._data.exit_code
 
     def _state_changed(self, state):
         self._data.state = state
