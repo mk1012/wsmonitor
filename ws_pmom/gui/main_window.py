@@ -4,11 +4,11 @@ import sys
 from json import JSONDecodeError
 
 from PySide2 import QtWebSockets
-from PySide2.QtCore import (QRect, QUrl, Qt)
+from PySide2.QtCore import (QUrl, Qt)
 from PySide2.QtGui import QTextCursor
 from PySide2.QtWidgets import *
-from gui.process_widget import ProcessListWidget
-from process_data import ProcessData
+from ws_pmom.gui.process_widget import ProcessListWidget
+from ws_pmom.process_data import ProcessData
 
 
 class MainWindow(QMainWindow):

@@ -2,10 +2,10 @@
 from typing import Dict, Set
 
 from PySide2.QtCore import Signal, Slot, Qt
-from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QLineEdit, QSizePolicy, QVBoxLayout, \
-    QScrollArea, QSpacerItem
+from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, \
+    QScrollArea
 
-from process_data import ProcessData
+from ws_pmom.process_data import ProcessData
 
 
 class ProcessWidget(QWidget):

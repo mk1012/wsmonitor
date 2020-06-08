@@ -3,8 +3,8 @@ import time, sys
 
 
 def signal_handler(sig, frame):
-    print('You pressed:', sig)
-    if sig == 15:
+    print('Signal received:', sig)
+    if sig == signal.SIGTERM:
         time.sleep(.2)
         sys.exit(42)
 
@@ -12,6 +12,6 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
-while True:
+for i in range(10):
     print("Busy waiting...")
     time.sleep(1)

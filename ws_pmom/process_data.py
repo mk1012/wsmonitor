@@ -1,3 +1,6 @@
+from typing import Optional
+
+
 class ProcessData(object):
     UNKNOWN = "unknown"
     RUNNING = "running"
@@ -8,12 +11,12 @@ class ProcessData(object):
     BEING_KILLED = "being_killed"
     ENDED = "ended"
 
-    def __init__(self, uid: str, command: str, as_process_group=False):
+    def __init__(self, uid: str, command: str, as_process_group=False) -> None:
         self.uid = uid
-        self.command = command
-        self.as_process_group = as_process_group
-        self.state = ProcessData.INITIALIZED
-        self.exit_code = None
+        self.command: str = command
+        self.as_process_group: bool = as_process_group
+        self.state: str = ProcessData.INITIALIZED
+        self.exit_code: Optional[int] = None
 
     @staticmethod
     def from_dict(data):

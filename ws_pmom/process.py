@@ -1,50 +1,49 @@
-import logging
 import asyncio
+import logging
 import os
 import signal
-import sys
-import time
 from asyncio import CancelledError
-from asyncio.subprocess import STDOUT, PIPE
-from typing import Union, Callable, Coroutine
+from asyncio.subprocess import PIPE
+from typing import Union, Callable, Optional
 
-from process_data import ProcessData
+from ws_pmom.process_data import ProcessData
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO,
-                    format="%(asctime)s - %(name)s - %(lineno)d -  %(message)s")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
 class ProcessOutput(object):
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.stdout = []
         self.stderr = []
         self.exit_code = None
 
-    def reset(self):
+    def reset(self) -> None:
         self.stdout.clear()
         self.stderr.clear()
         self.exit_code = None
 
 
+ProcessCallback = Callable[['Process', str], None]
+
+
 class Process(object):
-    def __init__(self, process_data: ProcessData):
+    def __init__(self, process_data: ProcessData) -> None:
         self._data = process_data
-        self._asyncio_process = None  # type: Union[asyncio.subprocess.Process, None]
+        self._asyncio_process: Optional[asyncio.subprocess.Process] = None
 
-        self._process_task = None  # type: Union[asyncio.Task, None]
-        self._state_change_listener = None
-        self._output_listener = None
+        self._process_task: Optional[asyncio.Task] = None
+        self._state_change_listener: Optional[ProcessCallback] = None
+        self._output_listener: Optional[ProcessCallback] = None
 
-    def set_state_listener(self, listener):
+    def set_state_listener(self, listener: ProcessCallback) -> None:
         self._state_change_listener = listener
 
-    def set_output_listener(self, listener):
+    def set_output_listener(self, listener: ProcessCallback) -> None:
         self._output_listener = listener
 
-    async def _run_process(self):
+    async def _run_process(self) -> int:
         preexec_fn = None
         if self._data.as_process_group:
             # Run process in a new process group
@@ -71,12 +70,11 @@ class Process(object):
             self._data.ensure_exit_code(-1)
 
         logger.debug("Process[%s]: has exited with: %d", self.get_uid(), self._data.exit_code)
-
         self._state_changed(ProcessData.ENDED)
+
         return self._data.exit_code
 
-    async def stop(self, int_timeout=2, term_timeout=2):
-        # type: (int, int) -> Union[str, int]
+    async def stop(self, int_timeout: float = 2, term_timeout: float = 2) -> Union[int, str]:
 
         if not self.is_running():
             return "Process[%s]: Is not running, cannot stop" % self.get_uid()
@@ -96,7 +94,7 @@ class Process(object):
             kill_fn(pid, signal.SIGINT)
             # wait shortly to see if already stopped
             await asyncio.sleep(.01)
-            # NOTE: we check for the exit code, which is set at the end of start
+            # NOTE: we check for the exit code, which is only set at the end of start
             # _run_process and should indicate that the process has truly exited
             if self.has_exit_code():
                 return self.exit_code()
@@ -126,8 +124,8 @@ class Process(object):
                 await asyncio.sleep(.01)
 
         except ProcessLookupError as ple:
-            msg = "Failed to find process %s" % self.get_uid()
-            logger.warning(msg, exc_info=ple)
+            msg = f"Failed to find process with pid: '{self.get_uid()}' it is no longer running."
+            logger.warning(msg)
             return msg
 
         except OSError as e:
@@ -135,6 +133,7 @@ class Process(object):
             return "Exception while stopping process %s" % e.__class__.__name__
 
     async def restart(self):
+        # TODO(mark): don't use yet
         await self.stop()
 
         # TODO(mark): wait with a timeout and cancel if necessary
@@ -148,38 +147,36 @@ class Process(object):
         return self.start_as_task()
 
     @staticmethod
-    async def _read_stream(stream: asyncio.StreamReader, handler: Callable):
+    async def _read_stream(stream: asyncio.StreamReader, handler: Callable) -> None:
         while True:
             line = await stream.readline()
             if not line:
                 break
 
             if handler is not None:
-                print("line", line)
                 handler(line)
 
-    def start_as_task(self):
-        print(self._data)
+    def start_as_task(self) -> Union[asyncio.Task, str]:
         if not self._data.is_in_state(ProcessData.INITIALIZED):
             msg = "Process cannot be started in state: %s" % self._data.state
             logger.warning(msg)
             return msg
 
-        self._data.state = ProcessData.STARTING  # change state to ensure single start
+        # change state to ensure single start, without an event
+        self._data.state = ProcessData.STARTING
         self._process_task = asyncio.create_task(self._run_process())
         return self._process_task
 
-    def get_start_task(self):
+    def get_start_task(self) -> asyncio.Task:
         return self._process_task
 
-    def has_exit_code(self):
+    def has_exit_code(self) -> bool:
         return self._data.exit_code is not None
 
-    def exit_code(self):
-        # type: () -> int
+    def exit_code(self) -> int:
         return self._data.exit_code
 
-    def _state_changed(self, state):
+    def _state_changed(self, state: str) -> None:
         self._data.state = state
         # TODO: should it be run in separate task?
         # By not awaiting this function users can only call blocking code
@@ -190,11 +187,11 @@ class Process(object):
     def __hash__(self):
         return self._data.uid.__hash__()
 
-    def is_running(self):
+    def is_running(self) -> bool:
         return self._data.state == ProcessData.RUNNING
 
-    def has_completed(self):
+    def has_completed(self) -> bool:
         return self._data.state == ProcessData.ENDED
 
-    def get_uid(self):
+    def get_uid(self) -> str:
         return self._data.uid
