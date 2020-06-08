@@ -17,7 +17,7 @@ class ProcessWidget(QWidget):
         self._disable_buttons(False)
 
     def on_update_process_data(self, process_data: ProcessData):
-        print("Date update:", process_data)
+        print("Process data updated:", process_data)
 
         self._set_state(process_data.state)
 
@@ -116,8 +116,7 @@ class ProcessListWidget(QScrollArea):
         self.setWidgetResizable(True)
         self.setWidget(self.main_widget)
 
-    @Slot(str, str)
-    def on_action_completed(self, p_uid, action):
+    def on_action_completed(self, p_uid, action, success, data):
         print("Action completed: ", p_uid, action)
         self.process_widget_map[p_uid].on_request_completed(action)
 

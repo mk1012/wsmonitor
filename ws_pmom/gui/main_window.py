@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import json
+import logging
 import sys
 from json import JSONDecodeError
 
@@ -9,6 +10,9 @@ from PySide2.QtGui import QTextCursor
 from PySide2.QtWidgets import *
 from ws_pmom.gui.process_widget import ProcessListWidget
 from ws_pmom.process_data import ProcessData
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 class MainWindow(QMainWindow):
@@ -27,57 +31,61 @@ class MainWindow(QMainWindow):
 
     def on_connect_clicked(self):
         if self._ws_connected:
-            self.send_message()
+            logger.warning("Already connected")
             return
 
         self.establish_connection()
 
     def establish_connection(self):
         server_url = self.txt_conenction.text()
-        print("Connecting to: ", server_url)
+        logger.info("Connecting to: %s", server_url)
         self.client.open(QUrl(server_url))
 
     def on_message(self, message):
-        print("text msg: ", message)
+        logger.info("Incomming msg: %s" % message)
         try:
             json_data = json.loads(message)
-        except JSONDecodeError:
-            print("Invalid message: ", message)
+        except JSONDecodeError as e:
+            logger.error("Failed to parse message", exc_info=e)
             return
 
-        typ = json_data["type"]
-        if typ == "state":
+        type = json_data["type"]
+        if type == "ProcessSummaryEvent":
             data = json_data["data"]
             pdatas = set([ProcessData.from_dict(entry) for entry in data])
             self.process_list.update_process_data(pdatas)
-        if typ == "process_state_changed":
-            state = json_data["data"]
-            uid = json_data["uid"]
+        if type == "StateChangedEvent":
+            payload = json_data["data"]
+            state = payload["data"]
+            uid = payload["uid"]
             self.process_list.update_single_process_state(uid, state)
-        if typ == "action_response":
-            response = json_data["data"]
-            uid = response["uid"]
-            result = response["result"]
-            self.process_list.on_action_completed(uid, result)
-        if typ == "outputevent":
+        if type == "ActionResponse":
+            payload = json_data["data"]
+            action = json_data.get("action", None)
+            if action is None:
+                logger.info("Request failed")
+                return
+            args = (payload[key] for key in ["uid", "action", "success", "data"])
+            self.process_list.on_action_completed(*args)
+        if type == "OutputEvent":
             self.txt_output.moveCursor(QTextCursor.End)
-            self.txt_output.insertPlainText(json_data["data"])
+            self.txt_output.insertPlainText(json_data["data"]["data"])
 
     def on_connected(self):
-        print("connected")
+        logger.info("connected")
         self._ws_connected = True
         self.set_connected_ui()
 
     def on_disconnected(self):
-        print("disconnected")
+        logger.info("disconnected")
         self._ws_connected = False
         self.set_disconnected_ui()
 
     def send_message(self, msg):
         if not self._ws_connected:
-            print("CLIENT NOT CONENCTED!")
+            logger.warning("CLIENT NOT CONENCTED!")
             return
-        print("send_message", msg)
+        logger.info("Send_message: %s", msg)
         self.client.sendTextMessage(msg)
 
     def onPong(self, elapsedTime, payload):
@@ -114,7 +122,6 @@ class MainWindow(QMainWindow):
         self.splitter.setSizePolicy(sizePolicy)
         self.splitter.setOrientation(Qt.Horizontal)
 
-
         self.main_layout.addLayout(self.layout_connection)
         self.splitter.addWidget(self.process_list)
         self.splitter.addWidget(self.txt_output)
@@ -135,8 +142,8 @@ class MainWindow(QMainWindow):
         self.set_disconnected_ui()
 
     def on_action_requested(self, uid, action):
-        print("New action request", uid, action)
-        self.send_message(json.dumps({"type": "action", "action": action, "uid": uid}))
+        logger.info("New action request: %s, %s", uid, action)
+        self.send_message(json.dumps({"action": action, "data": {"uid": uid}}))
 
     def set_disconnected_ui(self):
         self.process_list.setDisabled(True)

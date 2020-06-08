@@ -9,6 +9,7 @@ from ws_pmom.ws_monitor import WebsocketActionServer, CallbackClientAction, Acti
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+
 class ProcessSummaryEvent(JsonFormattable):
 
     def __init__(self, data):
@@ -29,9 +30,8 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         })
 
     async def run(self):
-        asyncio.create_task(self.listen())
+        asyncio.create_task(self.start_server())
         self.start_monitor()
-
 
     async def __register_action(self, uid: str, cmd: str, group=True) -> ActionResponse:
         result = self.register_process(uid, cmd, group)
@@ -59,7 +59,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         self._is_running = True
         while self._is_running:
             await asyncio.sleep(self.periodic_update_sleep_duration)
-            print("Periodic update")
+            logger.debug("Periodic update")
             data = ProcessSummaryEvent(self.as_json_data())
             await self.broadcast(str(data))
 
@@ -70,15 +70,16 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         return tasks
 
     async def on_state_event(self, event):
-        logger.info("Received state event: %s", event)
+        logger.debug("Received state event: %s", event)
         await self.broadcast(json.dumps(event.get_data()))
 
     async def on_output_event(self, event):
+        logger.debug("Received output event: %s", event)
         await self.broadcast(json.dumps(event.get_data()))
 
     async def shutdown(self):
-        logger.debug("Shutdown initiated")
-        # First stop all processes
+        logger.info("Shutdown initiated")
+
+        # stop process monitor and
         await self.shutdown_monitor()
-        await self.trigger_server_shutdown()
-        #asyncio.get_event_loop().stop()
+        await self.shutdown_server()

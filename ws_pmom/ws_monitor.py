@@ -75,7 +75,6 @@ class WebsocketActionServer:
         self.known_actions = {}  # type: Dict[str, ClientAction]
         self.server : Optional[websockets.server.WebSocketServer] = None
         self.clients = set()
-        self._shutdown_event = asyncio.Event()
 
     def add_action(self, name: str, action: ClientAction):
         if name in self.known_actions:
@@ -84,14 +83,13 @@ class WebsocketActionServer:
         self.known_actions[name] = action
         return True
 
-    async def trigger_server_shutdown(self):
+    async def shutdown_server(self):
         logger.info("Server shutdown triggered")
-        self._shutdown_event.set()
         self.server.close()
         await self.server.wait_closed()
         logger.info("Server closed")
 
-    async def listen(self, host="127.0.0.1", port=8766):
+    async def start_server(self, host="127.0.0.1", port=8766):
 
         # run as long as future is not finished. If the with statement is done
         # all connections will be automatically closed

@@ -1,3 +1,6 @@
+import json
+
+
 class JsonFormattable():
     def __init__(self, data):
         self.data = data
@@ -7,4 +10,4 @@ class JsonFormattable():
         return {"type": self.type, "data": self.data}
 
     def __str__(self):
-        return str(self.get_data())
+        return json.dumps(self.get_data())

@@ -132,18 +132,17 @@ class Process(object):
             logger.warning("Exception stopping process", exc_info=e)
             return "Exception while stopping process %s" % e.__class__.__name__
 
-    async def restart(self):
-        # TODO(mark): don't use yet
-        await self.stop()
-
-        # TODO(mark): wait with a timeout and cancel if necessary
-        # self._start_task.cancel() -> throws
-        await self._process_task
+    async def restart_ended_process(self):
+        if self._data.state != ProcessData.ENDED:
+            msg = "Process cannot be re-started in state: %s" % self._data.state
+            logger.warning(msg)
+            return msg
 
         # reset process state
         self._data.reset()
         self._asyncio_process = None
         self._process_task = None
+
         return self.start_as_task()
 
     @staticmethod
@@ -157,6 +156,13 @@ class Process(object):
                 handler(line)
 
     def start_as_task(self) -> Union[asyncio.Task, str]:
+        if self._data.is_in_state(ProcessData.ENDED):
+            logger.info("Restarting ended task: %s", self.get_uid())
+            # reset process state
+            self._data.reset()
+            self._asyncio_process = None
+            self._process_task = None
+
         if not self._data.is_in_state(ProcessData.INITIALIZED):
             msg = "Process cannot be started in state: %s" % self._data.state
             logger.warning(msg)

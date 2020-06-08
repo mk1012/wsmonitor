@@ -18,13 +18,14 @@ def main():
     loop.set_debug(True)
 
     def shutdown_handler():
-        wpm.trigger_server_shutdown()
+        wpm.shutdown_server()
 
     loop.add_signal_handler(signal.SIGINT, shutdown_handler)
     loop.add_signal_handler(signal.SIGTERM, shutdown_handler)
 
     async def main_loop():
-        task = asyncio.create_task(wpm.listen())
+
+        task = asyncio.create_task(wpm.start_server())
         await task
         loop.stop()
 

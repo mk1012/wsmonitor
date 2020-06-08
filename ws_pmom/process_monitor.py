@@ -115,4 +115,4 @@ class ProcessMonitor(object):
         except asyncio.CancelledError:
             pass
 
-        logger.info("All processes stopped")
+        logger.info("Monitor shutdown complete, all processes stopped")
