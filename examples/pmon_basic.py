@@ -3,7 +3,7 @@ import logging
 import signal
 import sys
 
-from ws_pmom.process_monitor import ProcessMonitor
+from wsmonitor.process.process_monitor import ProcessMonitor
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(lineno)d -  %(message)s")

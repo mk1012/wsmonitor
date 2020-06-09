@@ -8,8 +8,10 @@ from PySide2 import QtWebSockets
 from PySide2.QtCore import (QUrl, Qt)
 from PySide2.QtGui import QTextCursor
 from PySide2.QtWidgets import *
-from ws_pmom.gui.process_widget import ProcessListWidget
-from ws_pmom.process_data import ProcessData
+
+from wsmonitor.format import JsonFormattable
+from wsmonitor.gui.process_widget import ProcessListWidget
+from wsmonitor.process.data import ProcessData, ProcessSummaryEvent, StateChangedEvent
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -50,17 +52,15 @@ class MainWindow(QMainWindow):
             return
 
         type = json_data["type"]
+        payload = json_data["data"]
         if type == "ProcessSummaryEvent":
-            data = json_data["data"]
-            pdatas = set([ProcessData.from_dict(entry) for entry in data])
-            self.process_list.update_process_data(pdatas)
+            pdatas = ProcessSummaryEvent.from_json(payload)
+            self.process_list.update_process_data(set(pdatas.processes))
         if type == "StateChangedEvent":
-            payload = json_data["data"]
-            state = payload["data"]
-            uid = payload["uid"]
-            self.process_list.update_single_process_state(uid, state)
+            state: StateChangedEvent = StateChangedEvent.from_json(payload)
+            self.process_list.update_single_process_state(state.uid, state.state)
         if type == "ActionResponse":
-            payload = json_data["data"]
+            payload = payload
             action = json_data.get("action", None)
             if action is None:
                 logger.info("Request failed")
@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
             self.process_list.on_action_completed(*args)
         if type == "OutputEvent":
             self.txt_output.moveCursor(QTextCursor.End)
-            self.txt_output.insertPlainText(json_data["data"]["data"])
+            self.txt_output.insertPlainText(payload["output"])
 
     def on_connected(self):
         logger.info("connected")

@@ -5,7 +5,7 @@ from PySide2.QtCore import Signal, Slot, Qt
 from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, \
     QScrollArea
 
-from ws_pmom.process_data import ProcessData
+from wsmonitor.process.data import ProcessData
 
 
 class ProcessWidget(QWidget):

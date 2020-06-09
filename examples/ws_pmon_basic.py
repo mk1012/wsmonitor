@@ -3,9 +3,9 @@ import logging
 import signal
 import sys
 
-from ws_pmom.ws_process_monitor import WebsocketProcessMonitor
+from wsmonitor.ws_process_monitor import WebsocketProcessMonitor
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 

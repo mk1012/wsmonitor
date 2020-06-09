@@ -8,7 +8,7 @@ from websockets import WebSocketException
 import asyncio
 import websockets
 
-from ws_pmom.format import JsonFormattable
+from wsmonitor.format import JsonFormattable
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -27,7 +27,9 @@ class ClientConnection():
 class ActionResponse(JsonFormattable):
 
     def __init__(self, action: str, success=True, data: Any = None):
-        super().__init__({"action": action, "success": success, "data": data})
+        self.action = action
+        self.success = success
+        self.data = data
 
 
 class ActionFailure(ActionResponse):
@@ -73,7 +75,7 @@ class WebsocketActionServer:
         super().__init__()
         self.periodic_update_sleep_duration = 10
         self.known_actions = {}  # type: Dict[str, ClientAction]
-        self.server : Optional[websockets.server.WebSocketServer] = None
+        self.server: Optional[websockets.server.WebSocketServer] = None
         self.clients = set()
 
     def add_action(self, name: str, action: ClientAction):
@@ -90,9 +92,6 @@ class WebsocketActionServer:
         logger.info("Server closed")
 
     async def start_server(self, host="127.0.0.1", port=8766):
-
-        # run as long as future is not finished. If the with statement is done
-        # all connections will be automatically closed
         self.server = await websockets.serve(self.__on_client_connected, host, port)
 
     async def __on_client_connected(self, websocket, path):

@@ -6,7 +6,7 @@ from asyncio import CancelledError
 from asyncio.subprocess import PIPE
 from typing import Union, Callable, Optional
 
-from ws_pmom.process_data import ProcessData
+from wsmonitor.process.data import ProcessData
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -145,15 +145,14 @@ class Process(object):
 
         return self.start_as_task()
 
-    @staticmethod
-    async def _read_stream(stream: asyncio.StreamReader, handler: Callable) -> None:
+    async def _read_stream(self, stream: asyncio.StreamReader, handler: Callable) -> None:
         while True:
             line = await stream.readline()
             if not line:
                 break
 
             if handler is not None:
-                handler(line)
+                handler(self, line)
 
     def start_as_task(self) -> Union[asyncio.Task, str]:
         if self._data.is_in_state(ProcessData.ENDED):

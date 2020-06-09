@@ -3,29 +3,11 @@ import logging
 from asyncio.tasks import Task
 from typing import Dict, Union, Optional, List
 
-from ws_pmom.format import JsonFormattable
-from ws_pmom.process import Process
-from ws_pmom.process_data import ProcessData
+from wsmonitor.process.process import Process
+from wsmonitor.process.data import ProcessData, OutputEvent, StateChangedEvent
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-class ProcessEvent(JsonFormattable):
-    def __init__(self, process, data):
-        super().__init__({"uid": process.get_uid(), "data": data})
-
-
-class StateChangedEvent(ProcessEvent):
-
-    def __init__(self, process, data):
-        super().__init__(process, data)
-
-
-class OutputEvent(ProcessEvent):
-
-    def __init__(self, process, data):
-        super().__init__(process, data)
 
 
 class ProcessMonitor(object):
@@ -48,9 +30,6 @@ class ProcessMonitor(object):
         logger.info("Registered new process %s", name)
         return p
 
-    def as_json_data(self) -> List[Dict]:
-        return [self._processes[key]._data.as_dict() for key in self._processes]
-
     def start_process(self, uid: str) -> Union[str, Process]:
 
         if uid not in self._processes:
@@ -61,9 +40,9 @@ class ProcessMonitor(object):
             return "Process '%s' is already running" % uid
 
         process.set_state_listener(
-            lambda proc, state: self._state_event_queue.put_nowait(StateChangedEvent(proc, state)))
+            lambda proc, state: self._state_event_queue.put_nowait(StateChangedEvent(proc.get_uid(), state)))
         process.set_output_listener(
-            lambda output: self._output_event_queue.put_nowait(OutputEvent(process, output.decode())))
+            lambda proc, output: self._output_event_queue.put_nowait(OutputEvent(proc.get_uid(), output.decode())))
 
         return process.start_as_task()
 

@@ -2,18 +2,12 @@ import asyncio
 import json
 import logging
 
-from ws_pmom.format import JsonFormattable
-from ws_pmom.process_monitor import ProcessMonitor
-from ws_pmom.ws_monitor import WebsocketActionServer, CallbackClientAction, ActionResponse, ActionFailure
+from wsmonitor.process.data import ProcessSummaryEvent, StateChangedEvent, OutputEvent
+from wsmonitor.process.process_monitor import ProcessMonitor
+from wsmonitor.ws_monitor import WebsocketActionServer, CallbackClientAction, ActionResponse, ActionFailure
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-
-
-class ProcessSummaryEvent(JsonFormattable):
-
-    def __init__(self, data):
-        super().__init__(data)
 
 
 class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
@@ -30,6 +24,8 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         })
 
     async def run(self):
+        # TODO(mark): the server seems to case problems with other task (they are not scheduled?)
+        # therefore start in another task
         asyncio.create_task(self.start_server())
         self.start_monitor()
 
@@ -60,7 +56,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         while self._is_running:
             await asyncio.sleep(self.periodic_update_sleep_duration)
             logger.debug("Periodic update")
-            data = ProcessSummaryEvent(self.as_json_data())
+            data = ProcessSummaryEvent([proc._data for proc in self._processes.values()])
             await self.broadcast(str(data))
 
     def _get_monitor_tasks(self):
@@ -69,13 +65,13 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         tasks.append(periodic_state_update_task)
         return tasks
 
-    async def on_state_event(self, event):
-        logger.debug("Received state event: %s", event)
-        await self.broadcast(json.dumps(event.get_data()))
+    async def on_state_event(self, event:StateChangedEvent):
+        logger.debug("Received state event: %s", str(event))
+        await self.broadcast(str(event))
 
-    async def on_output_event(self, event):
-        logger.debug("Received output event: %s", event)
-        await self.broadcast(json.dumps(event.get_data()))
+    async def on_output_event(self, event:OutputEvent):
+        logger.debug("Received output event: %s", str(event))
+        await self.broadcast(str(event))
 
     async def shutdown(self):
         logger.info("Shutdown initiated")

@@ -3,7 +3,7 @@ import logging
 import signal
 
 logging.basicConfig(level=logging.DEBUG)
-from ws_pmom.ws_monitor import WebsocketActionServer, ClientAction
+from wsmonitor.ws_monitor import WebsocketActionServer, ClientAction, CallbackClientAction
 
 
 async def hello():
@@ -14,7 +14,7 @@ async def hello():
 def main():
     loop = asyncio.get_event_loop()
     wpm = WebsocketActionServer()
-    wpm.add_action("test", ClientAction("test", [], hello))
+    wpm.add_action("test", CallbackClientAction("test", [], hello))
     loop.set_debug(True)
 
     def shutdown_handler():
@@ -25,8 +25,8 @@ def main():
 
     async def main_loop():
 
-        task = asyncio.create_task(wpm.start_server())
-        await task
+        await wpm.start_server()
+        await wpm.server.wait_closed()
         loop.stop()
 
     try:
