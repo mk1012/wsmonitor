@@ -1,4 +1,4 @@
-from typing import Set
+from typing import Set, Dict
 
 from PySide2.QtCore import Signal, Qt
 from PySide2.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QLabel, QSizePolicy
@@ -37,13 +37,13 @@ class ProcessListWidget(QScrollArea):
         self.process_widget_map[response.uid].on_action_completed(response.action)
 
     def update_single_process_state(self, event: StateChangedEvent):
-        self.process_widget_map[event.uid]._update_state(event.state, event.exit_code)
-        # TODO(mark): update process data sets with new data
+        self.process_widget_map[event.uid].update_state(event.state, event.exit_code)
 
     def update_process_data(self, updated_process_data: Set[ProcessData]):
         known_processes = updated_process_data & self.process_data
         new_processes = updated_process_data - self.process_data
         unknown_processes = updated_process_data - self.process_data
+
         # TODO(mark): update process data sets with new data
         for known_process in known_processes:
             widget = self.process_widget_map[known_process.uid]

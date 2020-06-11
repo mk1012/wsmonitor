@@ -9,27 +9,29 @@ from PySide2.QtCore import (QUrl, Qt)
 from PySide2.QtGui import QTextCursor
 from PySide2.QtWidgets import *
 
-from wsmonitor.format import JsonFormattable
 from wsmonitor.gui.process_list import ProcessListWidget
-from wsmonitor.process.data import ProcessData, ProcessSummaryEvent, StateChangedEvent, ActionResponse
+from wsmonitor.process.data import ProcessSummaryEvent, StateChangedEvent, ActionResponse, OutputEvent
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class MainWindow(QMainWindow):
+class ProcessMonitorWindow(QMainWindow):
     def __init__(self):
-        super(MainWindow, self).__init__()
+        super(ProcessMonitorWindow, self).__init__()
+        self.ui = ProcessMonitorUI(self)
+
         self._ws_connected = False
         self.client = QtWebSockets.QWebSocket("", QtWebSockets.QWebSocketProtocol.Version13, None)
 
-        self.setup_ui()
-
+        # Subscribe to events from the ws connection
         self.client.error.connect(self.on_ws_error)
         self.client.connected.connect(self.on_connected)
         self.client.disconnected.connect(self.on_disconnected)
         self.client.textMessageReceived.connect(self.on_message)
-        self.btn_connect.clicked.connect(self.on_connect_clicked)
+
+        self.ui.process_list.action_requested.connect(self.on_action_requested)
+        self.ui.btn_connect.clicked.connect(self.on_connect_clicked)
 
     def on_connect_clicked(self):
         if self._ws_connected:
@@ -39,7 +41,7 @@ class MainWindow(QMainWindow):
         self.establish_connection()
 
     def establish_connection(self):
-        server_url = self.txt_conenction.text()
+        server_url = self.ui.txt_conenction.text()
         logger.info("Connecting to: %s", server_url)
         self.client.open(QUrl(server_url))
 
@@ -47,56 +49,66 @@ class MainWindow(QMainWindow):
         # logger.info("Incomming msg: %s" % message)
         try:
             json_data = json.loads(message)
+            type = json_data["type"]
+            payload = json_data["data"]
+
+            if type == "ProcessSummaryEvent":
+                pdatas = ProcessSummaryEvent.from_json(payload)
+                self.ui.process_list.update_process_data(set(pdatas.processes))
+            if type == "StateChangedEvent":
+                state: StateChangedEvent = StateChangedEvent.from_json(payload)
+                self.ui.process_list.update_single_process_state(state)
+            if type == "ActionResponse":
+                response = ActionResponse.from_json(payload)
+                self.ui.process_list.on_action_completed(response)
+            if type == "OutputEvent":
+                output = OutputEvent.from_json(payload)
+                self.ui.handle_output(output)
         except JSONDecodeError as e:
             logger.error("Failed to parse message", exc_info=e)
-            return
+        except KeyError as e:
+            logger.error("Could not retrieve expected field from JSON", exc_info=e)
+        except Exception as e:
+            logger.error("Unexpected exception on incomming message", exc_info=e)
 
-        type = json_data["type"]
-        payload = json_data["data"]
-        if type == "ProcessSummaryEvent":
-            pdatas = ProcessSummaryEvent.from_json(payload)
-            self.process_list.update_process_data(set(pdatas.processes))
-        if type == "StateChangedEvent":
-            state: StateChangedEvent = StateChangedEvent.from_json(payload)
-            self.process_list.update_single_process_state(state)
-        if type == "ActionResponse":
-            response = ActionResponse.from_json(payload)
-            self.process_list.on_action_completed(response)
-        if type == "OutputEvent":
-            self.txt_output.moveCursor(QTextCursor.End)
-            self.txt_output.insertPlainText(payload["output"])
+    def on_action_requested(self, uid, action):
+        logger.info("New action request: %s, %s", uid, action)
+        self.send_message(json.dumps({"action": action, "data": {"uid": uid}}))
 
     def on_connected(self):
         logger.info("connected")
         self._ws_connected = True
-        self.set_connected_ui()
+        self.ui.set_connected_ui()
 
     def on_disconnected(self):
-        logger.info("disconnected")
+        logger.info("Disconnected")
         self._ws_connected = False
-        self.set_disconnected_ui()
+        self.ui.set_disconnected_ui("Connection has been closed.")
 
     def send_message(self, msg):
         if not self._ws_connected:
-            logger.warning("CLIENT NOT CONENCTED!")
+            logger.warning("CLIENT NOT CONNECTED!")
             return
-        logger.info("Send_message: %s", msg)
+        logger.info("Sending message: %s", msg)
         self.client.sendTextMessage(msg)
 
-    def onPong(self, elapsedTime, payload):
-        print("onPong - time: {} ; payload: {}".format(elapsedTime, payload))
-
     def on_ws_error(self, error_code):
-        print("error code: {}".format(error_code))
-        print(self.client.errorString())
+        logger.error("WS Error, code: {}".format(error_code))
+        error_msg = self.client.errorString()
+        logger.error(error_msg)
+
         self.client.close()
-        self.set_disconnected_ui()
+        self.ui.set_disconnected_ui(error_msg)
 
     def close(self):
         self.client.close()
 
-    def setup_ui(self):
-        self.main_widget = QWidget(self)
+
+class ProcessMonitorUI(object):
+    def __init__(self, window: ProcessMonitorWindow):
+        self.window = window
+
+        self.main_widget = QWidget(window)
         self.main_layout = QVBoxLayout()
         self.layout_connection = QHBoxLayout()
         self.txt_conenction = QLineEdit()
@@ -117,45 +129,42 @@ class MainWindow(QMainWindow):
         self.splitter.setStretchFactor(0, 10)
         self.splitter.setStretchFactor(1, 0)
 
-
         self.main_layout.addLayout(self.layout_connection)
         self.splitter.addWidget(self.process_list)
         self.splitter.addWidget(self.txt_output)
         self.main_layout.addWidget(self.splitter)
 
         self.main_widget.setLayout(self.main_layout)
-        self.setCentralWidget(self.main_widget)
-        self.statusbar = QStatusBar(self)
-        self.statusbar.setObjectName(u"statusbar")
-        self.setStatusBar(self.statusbar)
-        self.setWindowTitle("Process Monitor")
+        self.statusbar = QStatusBar(window)
+
         self.txt_conenction.setPlaceholderText("ws://127.0.0.1:8766")
         self.txt_conenction.setText("ws://127.0.0.1:8766")
         self.btn_connect.setText("Connect")
 
-        self.process_list.action_requested.connect(self.on_action_requested)
-        self.setMinimumSize(480, 320)
-        self.set_disconnected_ui()
+        window.setCentralWidget(self.main_widget)
+        window.setStatusBar(self.statusbar)
+        window.setWindowTitle("Process Monitor")
+        self.set_disconnected_ui("Click on Connect to establish a connection")
 
-    def on_action_requested(self, uid, action):
-        logger.info("New action request: %s, %s", uid, action)
-        self.send_message(json.dumps({"action": action, "data": {"uid": uid}}))
-
-    def set_disconnected_ui(self):
+    def set_disconnected_ui(self, msg:str):
         self.process_list.setDisabled(True)
         self.btn_connect.setDisabled(False)
-        self.statusbar.showMessage("Disconnected. Connected to a websocket server")
+        self.statusbar.showMessage(f"Disconnected. {msg}")
 
     def set_connected_ui(self):
         self.process_list.setDisabled(False)
         self.btn_connect.setDisabled(True)
-        self.statusbar.showMessage("Connected.")
+        self.statusbar.showMessage("Connection established.")
+
+    def handle_output(self, output):
+        self.txt_output.moveCursor(QTextCursor.End)
+        self.txt_output.insertPlainText(output.output)
 
 
 def main():
     app = QApplication(sys.argv)
 
-    window = MainWindow()
+    window = ProcessMonitorWindow()
     window.show()
 
     sys.exit(app.exec_())
