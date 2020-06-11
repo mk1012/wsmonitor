@@ -1,10 +1,11 @@
 import asyncio
-import json
 import logging
 
-from wsmonitor.process.data import ProcessSummaryEvent, StateChangedEvent, OutputEvent
+import websockets
+
+from wsmonitor.process.data import ProcessSummaryEvent, StateChangedEvent, OutputEvent, ActionResponse, ActionFailure
 from wsmonitor.process.process_monitor import ProcessMonitor
-from wsmonitor.ws_monitor import WebsocketActionServer, CallbackClientAction, ActionResponse, ActionFailure
+from wsmonitor.ws_monitor import WebsocketActionServer, CallbackClientAction
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -16,12 +17,17 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         ProcessMonitor.__init__(self)
         WebsocketActionServer.__init__(self)
 
-        self.periodic_update_sleep_duration = 10
+        self.periodic_update_timeout = 30
+        self.trigger_periodic_event = asyncio.Event()
+
         self.known_actions.update({
             "register": CallbackClientAction("register", ["uid", "cmd", "group"], self.__register_action),
             "start": CallbackClientAction("start", ["uid"], self.__start_action),
             "stop": CallbackClientAction("stop", ["uid"], self.__stop_action),
         })
+
+    async def welcome_client(self, websocket: websockets.WebSocketClientProtocol):
+        await websocket.send(str(ProcessSummaryEvent(self.get_processes())))
 
     async def run(self):
         # TODO(mark): the server seems to case problems with other task (they are not scheduled?)
@@ -32,31 +38,40 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
     async def __register_action(self, uid: str, cmd: str, group=True) -> ActionResponse:
         result = self.register_process(uid, cmd, group)
         if isinstance(result, str):
-            return ActionFailure("registered", {"uid": uid, "data": result})
+            return ActionFailure(uid, "registered", result)
 
-        return ActionResponse("registered", True, {"uid": uid})
+        self.trigger_periodic_event.set()
+        return ActionResponse(uid, "registered", True)
 
     async def __start_action(self, uid: str) -> ActionResponse:
         result = self.start_process(uid)
         print("Result", result)
         if isinstance(result, str):
-            return ActionFailure("start", {"uid": uid, "data": result})
+            return ActionFailure(uid, "start", result)
 
-        return ActionResponse("start", True, {"uid": uid})
+        self.trigger_periodic_event.set()
+        return ActionResponse(uid, "start", True)
 
     async def __stop_action(self, uid: str) -> ActionResponse:
         result = await self.stop_process(uid)
-        if isinstance(result, str):
-            return ActionFailure("stop", {"uid": uid, "data": result})
+        success = isinstance(result, str)
+        if success:
+            self.trigger_periodic_event.set()
 
-        return ActionResponse("stop", True, {"uid": uid, "data": result})
+        return ActionResponse(uid, "stop", success, result)
 
     async def _periodic_update_func(self) -> None:
         self._is_running = True
         while self._is_running:
-            await asyncio.sleep(self.periodic_update_sleep_duration)
-            logger.debug("Periodic update")
-            data = ProcessSummaryEvent([proc._data for proc in self._processes.values()])
+
+            try:
+                await asyncio.wait_for(self.trigger_periodic_event.wait(), self.periodic_update_timeout)
+            except asyncio.TimeoutError:
+                pass
+
+            logger.info("Triggered periodic update. Via event: %s", self.trigger_periodic_event.is_set())
+            self.trigger_periodic_event.clear()
+            data = ProcessSummaryEvent(self.get_processes())
             await self.broadcast(str(data))
 
     def _get_monitor_tasks(self):
@@ -65,11 +80,11 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         tasks.append(periodic_state_update_task)
         return tasks
 
-    async def on_state_event(self, event:StateChangedEvent):
+    async def on_state_event(self, event: StateChangedEvent):
         logger.debug("Received state event: %s", str(event))
         await self.broadcast(str(event))
 
-    async def on_output_event(self, event:OutputEvent):
+    async def on_output_event(self, event: OutputEvent):
         logger.debug("Received output event: %s", str(event))
         await self.broadcast(str(event))
 

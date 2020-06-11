@@ -1,0 +1,12 @@
+[
+  {
+    "uid": "ping",
+    "cmd": "ping -c 5 google.de",
+    "process_group": false
+  },
+  {
+    "uid": "signal_inhibitor",
+    "cmd": "python3 signal_inhibit.py",
+    "process_group": false
+  }
+]

@@ -25,6 +25,7 @@ class ProcessOutput(object):
         self.exit_code = None
 
 
+StateChangeCallback = Callable[['Process'], None]
 ProcessCallback = Callable[['Process', str], None]
 
 
@@ -34,10 +35,10 @@ class Process(object):
         self._asyncio_process: Optional[asyncio.subprocess.Process] = None
 
         self._process_task: Optional[asyncio.Task] = None
-        self._state_change_listener: Optional[ProcessCallback] = None
+        self._state_change_listener: Optional[StateChangeCallback] = None
         self._output_listener: Optional[ProcessCallback] = None
 
-    def set_state_listener(self, listener: ProcessCallback) -> None:
+    def set_state_listener(self, listener: StateChangeCallback) -> None:
         self._state_change_listener = listener
 
     def set_output_listener(self, listener: ProcessCallback) -> None:
@@ -54,7 +55,7 @@ class Process(object):
         self._asyncio_process = await asyncio.create_subprocess_shell(
             self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn)
 
-        self._state_changed(ProcessData.RUNNING)
+        self._state_changed(ProcessData.STARTED)
 
         # start the read tasks and wait for them to complete
         try:
@@ -65,11 +66,11 @@ class Process(object):
             self._data.exit_code = await self._asyncio_process.wait()
 
         except CancelledError:
-            logger.warning("Process[%s]: Caught task CancelledError! Stopping process instead", self.get_uid())
+            logger.warning("Process[%s]: Caught task CancelledError! Stopping process instead", self.uid())
             await self.stop()
             self._data.ensure_exit_code(-1)
 
-        logger.debug("Process[%s]: has exited with: %d", self.get_uid(), self._data.exit_code)
+        logger.debug("Process[%s]: has exited with: %d", self.uid(), self._data.exit_code)
         self._state_changed(ProcessData.ENDED)
 
         return self._data.exit_code
@@ -77,10 +78,10 @@ class Process(object):
     async def stop(self, int_timeout: float = 2, term_timeout: float = 2) -> Union[int, str]:
 
         if not self.is_running():
-            return "Process[%s]: Is not running, cannot stop" % self.get_uid()
+            return "Process[%s]: Is not running, cannot stop" % self.uid()
 
-        logger.debug("Process[%s](%d): stopping...", self.get_uid(), self._asyncio_process.pid)
-        self._state_changed(ProcessData.BEING_KILLED)
+        logger.debug("Process[%s](%d): stopping...", self.uid(), self._asyncio_process.pid)
+        self._state_changed(ProcessData.STOPPING)
 
         try:
             # deal with process or process group
@@ -108,7 +109,7 @@ class Process(object):
                 if self.has_exit_code():
                     return self.exit_code()
 
-            logger.debug("Process[%s]: Stopping, escalating to SIGTERM", self.get_uid())
+            logger.debug("Process[%s]: Stopping, escalating to SIGTERM", self.uid())
             kill_fn(pid, signal.SIGTERM)
             while term_timeout > 0:
                 await asyncio.sleep(min(sleep_interval, term_timeout))
@@ -117,14 +118,14 @@ class Process(object):
                 if self.has_exit_code():
                     return self.exit_code()
 
-            logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self.get_uid())
+            logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self.uid())
             kill_fn(pid, signal.SIGKILL)
             # SIGKILL cannot be avoided
             while not self.has_exit_code():
                 await asyncio.sleep(.01)
 
         except ProcessLookupError as ple:
-            msg = f"Failed to find process with pid: '{self.get_uid()}' it is no longer running."
+            msg = f"Failed to find process with pid: '{self.uid()}' it is no longer running."
             logger.warning(msg)
             return msg
 
@@ -156,7 +157,7 @@ class Process(object):
 
     def start_as_task(self) -> Union[asyncio.Task, str]:
         if self._data.is_in_state(ProcessData.ENDED):
-            logger.info("Restarting ended task: %s", self.get_uid())
+            logger.info("Restarting ended task: %s", self.uid())
             # reset process state
             self._data.reset()
             self._asyncio_process = None
@@ -187,16 +188,19 @@ class Process(object):
         # By not awaiting this function users can only call blocking code
         # What happens if I receive a RUNNING event and request stop?
         if self._state_change_listener is not None:
-            self._state_change_listener(self, state)
+            self._state_change_listener(self)
 
     def __hash__(self):
         return self._data.uid.__hash__()
 
     def is_running(self) -> bool:
-        return self._data.state == ProcessData.RUNNING
+        return self._data.state == ProcessData.STARTED
 
     def has_completed(self) -> bool:
         return self._data.state == ProcessData.ENDED
 
-    def get_uid(self) -> str:
+    def uid(self) -> str:
         return self._data.uid
+
+    def state(self) -> str:
+        return self._data.state

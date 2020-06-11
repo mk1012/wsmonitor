@@ -1,11 +1,12 @@
 import asyncio
+import json
 import logging
 import signal
 import sys
 
 from wsmonitor.ws_process_monitor import WebsocketProcessMonitor
 
-logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -14,14 +15,17 @@ def main():
     loop.set_debug(True)
     wpm = WebsocketProcessMonitor()
 
-    wpm.register_process("test", "ping -c 20 8.8.8.8", True)
+    with open("processes.json") as file:
+        processes = json.load(file)
+    for process in processes:
+        wpm.register_process(process["uid"], process["cmd"], process["process_group"])
 
     async def do_shutdown():
         await wpm.shutdown()
         loop.stop()
 
     def shutdown_handler():
-        task = loop.create_task(do_shutdown())
+        loop.create_task(do_shutdown())
 
     loop.add_signal_handler(signal.SIGINT, shutdown_handler)
     loop.add_signal_handler(signal.SIGTERM, shutdown_handler)

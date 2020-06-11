@@ -1,14 +1,12 @@
 import json
 import logging
-import signal
-from typing import Union, Dict, Set, List, Any, Callable, Awaitable, Optional
+from typing import Dict, List, Any, Callable, Awaitable, Optional
 
+import websockets
 from websockets import WebSocketException
 
-import asyncio
-import websockets
-
-from wsmonitor.format import JsonFormattable
+from wsmonitor.process.data import ActionResponse, ActionFailure
+from wsmonitor.process.process import Process
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -24,24 +22,10 @@ class ClientConnection():
         pass
 
 
-class ActionResponse(JsonFormattable):
-
-    def __init__(self, action: str, success=True, data: Any = None):
-        self.action = action
-        self.success = success
-        self.data = data
-
-
-class ActionFailure(ActionResponse):
-
-    def __init__(self, action: str, msg: Union[Dict, str]):
-        super().__init__(action, False, data=msg)
-
-
 class ClientAction(object):
 
-    def __init__(self, uid):
-        self.uid = uid
+    def __init__(self, action_id):
+        self.action_id = action_id
 
     def call_with_data(self, json_data: Dict[str, Any]):
         raise NotImplementedError()
@@ -50,22 +34,22 @@ class ClientAction(object):
         raise NotImplementedError()
 
     def __str__(self):
-        return f"{self.__class__.__name__}({self.uid})"
+        return f"{self.__class__.__name__}({self.action_id})"
 
 
 class CallbackClientAction(ClientAction):
 
-    def __init__(self, uid, keys: List[str], func: Callable[[Any], Awaitable[ActionResponse]]):
-        ClientAction.__init__(self, uid)
+    def __init__(self, action_id, keys: List[str], func: Callable[[Any], Awaitable[ActionResponse]]):
+        ClientAction.__init__(self, action_id)
         self.keys = keys
         self.func = func
 
     async def call_with_data(self, json_data: Dict[str, str]) -> ActionResponse:
         if not all(map(lambda key: key in json_data.keys(), self.keys)):
-            return ActionFailure(self.uid, f"Not all required keys: {self.keys} set")
+            return ActionFailure(None, self.action_id, f"Not all required keys: {self.keys} set")
 
         response = await self.func(*(json_data[key] for key in self.keys))
-        logger.info("Action '%s' result: %s", self.uid, response)
+        logger.info("Action '%s' result: %s", self.action_id, response)
         return response
 
 
@@ -73,7 +57,7 @@ class WebsocketActionServer:
 
     def __init__(self):
         super().__init__()
-        self.periodic_update_sleep_duration = 10
+        self.periodic_update_timeout = 10
         self.known_actions = {}  # type: Dict[str, ClientAction]
         self.server: Optional[websockets.server.WebSocketServer] = None
         self.clients = set()
@@ -135,13 +119,13 @@ class WebsocketActionServer:
         try:
             json_data = json.loads(line)
         except:
-            return ActionResponse("invalid", False, "Received invalid input: %s" % line)
+            return ActionFailure(None, "invalid", "Received invalid input: %s" % line)
 
         action_name = json_data.get("action", None)
         payload = json_data.get("data", None)
         print(action_name, payload)
         if action_name not in self.known_actions or payload is None:
-            return ActionResponse(action_name, False, "Invalid action '%s' or missing data" % action_name)
+            return ActionFailure(None, action_name, "Invalid action '%s' or missing data" % action_name)
 
         action = self.known_actions[action_name]
         return await action.call_with_data(payload)

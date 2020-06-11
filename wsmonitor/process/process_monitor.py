@@ -40,9 +40,9 @@ class ProcessMonitor(object):
             return "Process '%s' is already running" % uid
 
         process.set_state_listener(
-            lambda proc, state: self._state_event_queue.put_nowait(StateChangedEvent(proc.get_uid(), state)))
+            lambda process: self._state_event_queue.put_nowait(StateChangedEvent(process.uid(), process.state(), process.exit_code())))
         process.set_output_listener(
-            lambda proc, output: self._output_event_queue.put_nowait(OutputEvent(proc.get_uid(), output.decode())))
+            lambda proc, output: self._output_event_queue.put_nowait(OutputEvent(proc.uid(), output.decode())))
 
         return process.start_as_task()
 
@@ -81,7 +81,7 @@ class ProcessMonitor(object):
         logger.info("Initiating monitor shutdown, stopping %d running processes", len(running))
 
         for process in running:
-            logger.info("Stopping process: %s", process.get_uid())
+            logger.info("Stopping process: %s", process.uid())
             await process.stop()  # will cancel all process tasks as well
 
         # stop or cancel the monitor tasks
@@ -95,3 +95,6 @@ class ProcessMonitor(object):
             pass
 
         logger.info("Monitor shutdown complete, all processes stopped")
+
+    def get_processes(self) -> List[ProcessData]:
+        return [proc._data for proc in self._processes.values()]

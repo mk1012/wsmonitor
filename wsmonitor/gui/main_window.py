@@ -10,8 +10,8 @@ from PySide2.QtGui import QTextCursor
 from PySide2.QtWidgets import *
 
 from wsmonitor.format import JsonFormattable
-from wsmonitor.gui.process_widget import ProcessListWidget
-from wsmonitor.process.data import ProcessData, ProcessSummaryEvent, StateChangedEvent
+from wsmonitor.gui.process_list import ProcessListWidget
+from wsmonitor.process.data import ProcessData, ProcessSummaryEvent, StateChangedEvent, ActionResponse
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -44,7 +44,7 @@ class MainWindow(QMainWindow):
         self.client.open(QUrl(server_url))
 
     def on_message(self, message):
-        logger.info("Incomming msg: %s" % message)
+        # logger.info("Incomming msg: %s" % message)
         try:
             json_data = json.loads(message)
         except JSONDecodeError as e:
@@ -58,15 +58,10 @@ class MainWindow(QMainWindow):
             self.process_list.update_process_data(set(pdatas.processes))
         if type == "StateChangedEvent":
             state: StateChangedEvent = StateChangedEvent.from_json(payload)
-            self.process_list.update_single_process_state(state.uid, state.state)
+            self.process_list.update_single_process_state(state)
         if type == "ActionResponse":
-            payload = payload
-            action = json_data.get("action", None)
-            if action is None:
-                logger.info("Request failed")
-                return
-            args = (payload[key] for key in ["uid", "action", "success", "data"])
-            self.process_list.on_action_completed(*args)
+            response = ActionResponse.from_json(payload)
+            self.process_list.on_action_completed(response)
         if type == "OutputEvent":
             self.txt_output.moveCursor(QTextCursor.End)
             self.txt_output.insertPlainText(payload["output"])
@@ -111,16 +106,17 @@ class MainWindow(QMainWindow):
         self.process_list = ProcessListWidget()
 
         self.txt_output = QTextEdit()
-        self.txt_output.setMinimumWidth(100)
-        self.process_list.setMinimumWidth(100)
 
-        self.splitter = QSplitter()
+        self.splitter = QSplitter(Qt.Horizontal)
+        self.splitter.setMinimumSize(820, 540)
         sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.splitter.sizePolicy().hasHeightForWidth())
         self.splitter.setSizePolicy(sizePolicy)
-        self.splitter.setOrientation(Qt.Horizontal)
+        self.splitter.setStretchFactor(0, 10)
+        self.splitter.setStretchFactor(1, 0)
+
 
         self.main_layout.addLayout(self.layout_connection)
         self.splitter.addWidget(self.process_list)
@@ -138,7 +134,7 @@ class MainWindow(QMainWindow):
         self.btn_connect.setText("Connect")
 
         self.process_list.action_requested.connect(self.on_action_requested)
-
+        self.setMinimumSize(480, 320)
         self.set_disconnected_ui()
 
     def on_action_requested(self, uid, action):

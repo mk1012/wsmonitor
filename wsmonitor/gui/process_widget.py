@@ -1,25 +1,127 @@
 # -*- coding: utf-8 -*-
-from typing import Dict, Set
+import logging
 
-from PySide2.QtCore import Signal, Slot, Qt
-from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, \
-    QScrollArea
+from PySide2 import QtCore, QtGui
+from PySide2.QtCore import Signal, Slot
+from PySide2.QtGui import QColor
+from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy
 
+from wsmonitor.gui.process_list import ProcessListWidget
 from wsmonitor.process.data import ProcessData
+
+logger = logging.getLogger(__name__)
 
 
 class ProcessWidget(QWidget):
     actionRequested = Signal(str, str)
+    colors = {
+        ProcessData.INITIALIZED: QColor(0, 0, 100, 50),
+        ProcessData.STARTING: QColor(0, 100, 0, 25),
+        ProcessData.STARTED: QColor(0, 100, 0, 50),
+        ProcessData.STOPPING: QColor(100, 0, 0, 25),
+        ProcessData.ENDED: QColor(100, 0, 0, 10),
+        ProcessData.ENDED + "_success": QColor(0, 100, 0, 10),
+    }
+
+    def get_bg_color(self):
+        return self.palette().background().color()
+
+    def set_bg_color(self, color):
+        palette = self.palette()
+        palette.setColor(self.backgroundRole(), color)
+        self.setPalette(palette)
+
+    color = QtCore.Property(QtGui.QColor, get_bg_color, set_bg_color)
+
+    def change_bg_color_with_blink(self, color: QColor):
+        self.blink(self.background_color, color)
+        self.background_color = color
+
+    def blink(self, start_color, end_color):
+        # make sure we apply any possible pending color changes
+        self.blink_animation.stop()
+        self.set_bg_color(self.background_color)
+
+        self.blink_animation.setDuration(1000)
+        self.blink_animation.setLoopCount(1)
+        self.blink_animation.setStartValue(start_color)
+        self.blink_animation.setEndValue(end_color)
+        self.blink_animation.setKeyValueAt(0.33, end_color)
+        self.blink_animation.setKeyValueAt(0.66, start_color)
+        self.blink_animation.start()
+
+    def __init__(self, process_data: ProcessData, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._awaiting_response = False
+        self.__process_data: ProcessData = process_data
+        self.setAutoFillBackground(True)
+        self.background_color = self.get_bg_color()
+        self.blink_animation = QtCore.QPropertyAnimation(self, b"color")
+
+        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Minimum)
+        self.layout = QGridLayout()
+        self.layout.setColumnMinimumWidth(0, 120)
+        self.layout.setColumnStretch(0, 10)
+        self.layout.setContentsMargins(4, 4, 4, 4)
+        self.layout.setVerticalSpacing(2)
+
+        self.btn_restart = QPushButton(self, text="Restart")
+        self.btn_start_stop = QPushButton(self, text="Start/Stop")
+        self.btn_start_stop.setObjectName("btn_start_stop")
+        self.btn_start_stop.setMinimumWidth(60)
+        self.btn_restart.setMinimumWidth(60)
+        self.txt_command = QLabel(self)
+        # self.txt_command.setPlaceholderText("Your command")
+
+        self.lbl_uid = QLabel(self, text=process_data.uid)
+        self.lbl_uid.setStyleSheet("font-weight: bold")
+        self.lbl_state = QLabel(self, text=process_data.state_info())
+
+        self.layout.addWidget(self.lbl_uid, 0, 0)
+        self.layout.addWidget(self.lbl_state, 0, 1, 1, 2)
+        self.layout.addWidget(self.txt_command, 1, 0)
+        self.layout.addWidget(self.btn_restart, 1, 1)
+        self.layout.addWidget(self.btn_start_stop, 1, 2)
+        self.setLayout(self.layout)
+
+        self.btn_start_stop.clicked.connect(self._start_stop_clicked)
+
+        self.on_update_process_data(process_data)
+
+    def get_command_text(self):
+        return self.txt_command.text()
+
+    def _start_stop_clicked(self):
+        action = "stop" if self.__process_data.is_in_state(ProcessData.STARTED) else "start"
+        self.request_action(action)
+
+    def request_action(self, action):
+        print("Requesting action: ", action)
+        self.disable_till_response()
+        self.actionRequested.emit(self.__process_data.uid, action)
 
     @Slot(str)
-    def on_request_completed(self, action_response):
+    def on_action_completed(self, action_response):
         print("Completed:", action_response)
         self._disable_buttons(False)
+        self._awaiting_response = False
+
+    def disable_till_response(self):
+        self._disable_buttons(True)
+        self._awaiting_response = True
+
+    def _disable_buttons(self, disable=True):
+        if not disable and self._awaiting_response:
+            logger.info("Awaiting response, cannot unlock buttons")
+            return
+        self.btn_start_stop.setDisabled(disable)
+        self.btn_restart.setDisabled(disable)
+
 
     def on_update_process_data(self, process_data: ProcessData):
-        print("Process data updated:", process_data)
+        logger.debug("Process data updated: %s", process_data)
 
-        self._set_state(process_data.state)
+        self._update_state(process_data.state, process_data.exit_code)
 
         # only update if not changed manually, i.e. __proc_data.cmd == text()
         current_cmd = self.txt_command.text()
@@ -30,141 +132,27 @@ class ProcessWidget(QWidget):
             self.txt_command.setStyleSheet("color: orange;")
         self.__process_data = process_data
 
-    def get_command_text(self):
-        return self.txt_command.text()
 
-    def _start_stop_clicked(self):
-        print("start_stop clicked")
+    def _update_state(self, state, exit_code):
+        self.__process_data.exit_code = exit_code
 
-        self._disable_buttons()
-        action = "stop" if self.__process_data.state == ProcessData.RUNNING else "start"
-        print("Requested action: ", action)
-        self.actionRequested.emit(self.__process_data.uid, action)
+        if self.__process_data.state != state:
+            self.__process_data.state = state
+            self.lbl_state.setText(self.__process_data.state_info())
 
-    def _disable_buttons(self, disable=True):
-        self.btn_start_stop.setDisabled(disable)
-        self.btn_restart.setDisabled(disable)
+            self.set_color_from_state(state)
 
-    def _set_state(self, state):
-        self.__process_data.state = state
-        self.lbl_state.setText("State: %s" % state)
-
-        is_running = state == ProcessData.RUNNING
+        is_running = state == ProcessData.STARTED
         if is_running:
             self.btn_start_stop.setText("Stop")
         else:
             self.btn_start_stop.setText("Start")
 
         self.btn_restart.setDisabled(not is_running)
+        self.btn_start_stop.setDisabled(False)
 
-    def __init__(self, process_data: ProcessData, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.__process_data = process_data
-
-        self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Minimum)
-        self.layout = QGridLayout()
-        self.layout.setContentsMargins(4, 4, 4, 4)
-        self.layout.setVerticalSpacing(2)
-        self.layout.setObjectName("layout_grid")
-        self.btn_restart = QPushButton(self, text="Restart")
-        self.btn_restart.setObjectName("btn_restart")
-        self.btn_start_stop = QPushButton(self, text="Start/Stop")
-        self.btn_start_stop.setObjectName("btn_start_stop")
-        self.txt_command = QLabel(self)
-        #        self.txt_command.setPlaceholderText("Your command")
-        self.txt_command.setObjectName("txt_command")
-
-        self.lbl_uid = QLabel(self, text="ID: %s" % self.__process_data.uid)
-        self.lbl_uid.setMinimumWidth(100)
-        self.lbl_command = QLabel(self, text="Command")
-        self.lbl_command.setObjectName("lbl_command")
-        self.lbl_state = QLabel(self, text="State")
-        self.lbl_state.setObjectName("lbl_state")
-
-        self.layout.addWidget(self.lbl_uid, 1, 0, 1, 1)
-        self.layout.addWidget(self.txt_command, 1, 1, 1, 1)
-        self.layout.addWidget(self.btn_restart, 1, 3, 1, 1)
-        self.layout.addWidget(self.btn_start_stop, 1, 2, 1, 1)
-        self.layout.addWidget(self.lbl_command, 0, 1, 1, 1)
-        self.layout.addWidget(self.lbl_state, 0, 2, 1, 3)
-        self.setLayout(self.layout)
-
-        self.btn_start_stop.clicked.connect(self._start_stop_clicked)
-
-        self.on_update_process_data(process_data)
-
-
-class ProcessListWidget(QScrollArea):
-    action_requested = Signal(str, str)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.process_data = set()
-        self.process_widget_map = {}  # type: Dict[str, ProcessWidget]
-
-        self.main_widget = QWidget()
-        self.layout = QVBoxLayout()
-        self.main_widget.setLayout(self.layout)
-
-        self.lbl_default = QLabel(text="No processes found")
-        self.layout.addWidget(self.lbl_default)
-        self.layout.addStretch()
-
-        # Configure ScrollArea
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setWidgetResizable(True)
-        self.setWidget(self.main_widget)
-
-    def on_action_completed(self, p_uid, action, success, data):
-        print("Action completed: ", p_uid, action)
-        self.process_widget_map[p_uid].on_request_completed(action)
-
-    def update_single_process_state(self, uid, state):
-        self.process_widget_map[uid]._set_state(state)
-        # TODO(mark): update process data sets with new data
-
-
-    def update_process_data(self, updated_process_data: Set[ProcessData]):
-        known_processes = updated_process_data & self.process_data
-        new_processes = updated_process_data - self.process_data
-        unknown_processes = updated_process_data - self.process_data
-        # TODO(mark): update process data sets with new data
-        for known_process in known_processes:
-            widget = self.process_widget_map[known_process.uid]
-            widget.on_update_process_data(known_process)
-
-        for new_process in new_processes:
-            widget = ProcessWidget(new_process)
-            self.process_widget_map[new_process.uid] = widget
-            widget.actionRequested.connect(self.action_requested)
-            self.layout.insertWidget(0, widget)
-
-        # TODO(mark): unknown processes
-
-        self.process_data = self.process_data | updated_process_data
-        self.lbl_default.setVisible(len(self.process_data) == 0)
-
-
-if __name__ == '__main__':
-    import sys
-    from PySide2.QtWidgets import QApplication
-
-    app = QApplication(sys.argv)
-
-    # serverObject = QtWebSockets.QWebSocketServer('My Socket', QtWebSockets.QWebSocketServer.NonSecureMode)
-    # server = MyServer(serverObject)
-    # serverObject.closed.connect(app.quit)
-
-    test = ProcessListWidget()
-    test.update_process_data(set([ProcessData("bubber", "ls *", False),
-                                  ProcessData("fisch", "htop", False)]))
-
-
-    def say_something(name):
-        print("aa", name)
-
-
-    test.show()
-
-    app.exec_()
+    def set_color_from_state(self, state):
+        if self.__process_data.has_ended_successfully():
+            self.change_bg_color_with_blink(self.colors[ProcessData.ENDED + "_success"])
+        else:
+            self.change_bg_color_with_blink(self.colors[state])
