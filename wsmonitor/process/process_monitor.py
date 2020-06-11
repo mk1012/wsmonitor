@@ -40,18 +40,26 @@ class ProcessMonitor(object):
             return "Process '%s' is already running" % uid
 
         process.set_state_listener(
-            lambda process: self._state_event_queue.put_nowait(StateChangedEvent(process.uid(), process.state(), process.exit_code())))
+            lambda process: self._state_event_queue.put_nowait(
+                StateChangedEvent(process.uid(), process.state(), process.exit_code())))
         process.set_output_listener(
             lambda proc, output: self._output_event_queue.put_nowait(OutputEvent(proc.uid(), output.decode())))
 
         return process.start_as_task()
 
-    async def stop_process(self, name: str) -> Union[int, str]:
-        if name not in self._processes:
-            return "No process with name '%s'" % name
+    async def stop_process(self, uid: str) -> Union[int, str]:
+        if uid not in self._processes:
+            return "No process with name '%s'" % uid
 
-        process = self._processes[name]
+        process = self._processes[uid]
         return await process.stop()
+
+    async def restart_process(self, uid: str):
+        result = await self.stop_process(uid)
+        if isinstance(result, str):
+            return f"Failed to stop process, cannot restart: {result}"
+
+        return self.start_process(uid)
 
     def _get_monitor_tasks(self) -> List[asyncio.Task]:
         # TODO: combine output events?

@@ -144,6 +144,7 @@ class ProcessMonitorUI(object):
         window.setCentralWidget(self.main_widget)
         window.setStatusBar(self.statusbar)
         window.setWindowTitle("Process Monitor")
+        window.setWindowIcon(window.style().standardIcon(QStyle.SP_BrowserReload))
         self.set_disconnected_ui("Click on Connect to establish a connection")
 
     def set_disconnected_ui(self, msg:str):

@@ -23,6 +23,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         self.known_actions.update({
             "register": CallbackClientAction("register", ["uid", "cmd", "group"], self.__register_action),
             "start": CallbackClientAction("start", ["uid"], self.__start_action),
+            "restart": CallbackClientAction("start", ["uid"], self.__restart_action),
             "stop": CallbackClientAction("stop", ["uid"], self.__stop_action),
         })
 
@@ -45,12 +46,19 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
 
     async def __start_action(self, uid: str) -> ActionResponse:
         result = self.start_process(uid)
-        print("Result", result)
         if isinstance(result, str):
             return ActionFailure(uid, "start", result)
 
         self.trigger_periodic_event.set()
         return ActionResponse(uid, "start", True)
+
+    async def __restart_action(self, uid: str) -> ActionResponse:
+        result = await self.restart_process(uid)
+        if isinstance(result, str):
+            return ActionFailure(uid, "restart", result)
+
+        self.trigger_periodic_event.set()
+        return ActionResponse(uid, "restart", True)
 
     async def __stop_action(self, uid: str) -> ActionResponse:
         result = await self.stop_process(uid)

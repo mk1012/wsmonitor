@@ -125,6 +125,7 @@ class WebsocketActionServer:
         payload = json_data.get("data", None)
         print(action_name, payload)
         if action_name not in self.known_actions or payload is None:
+            logger.warning(f"Invalid action {action_name}")
             return ActionFailure(None, action_name, "Invalid action '%s' or missing data" % action_name)
 
         action = self.known_actions[action_name]

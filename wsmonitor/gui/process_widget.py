@@ -4,7 +4,7 @@ import logging
 from PySide2 import QtCore, QtGui
 from PySide2.QtCore import Signal, Slot
 from PySide2.QtGui import QColor
-from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy
+from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy, QStyle
 
 from wsmonitor.process.data import ProcessData
 
@@ -101,7 +101,13 @@ class ProcessWidget(BlinkBackgroundWidget):
         self.layout.addWidget(self.btn_restart, 1, 2)
         self.setLayout(self.layout)
 
+        self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.btn_restart.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
+
+
         self.btn_start_stop.clicked.connect(self._start_stop_clicked)
+        self.btn_restart.clicked.connect(lambda: self.request_action("restart"))
+
 
         self.update_state(process_data.state, process_data.exit_code, True)
 
@@ -145,7 +151,10 @@ class ProcessWidget(BlinkBackgroundWidget):
         is_running = state == ProcessData.STARTED
         if is_running:
             self.btn_start_stop.setText("Stop")
+            self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
         else:
             self.btn_start_stop.setText("Start")
+            self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+
         self.btn_restart.setDisabled(not is_running)
         self.btn_start_stop.setDisabled(False)

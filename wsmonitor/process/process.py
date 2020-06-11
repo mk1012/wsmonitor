@@ -78,7 +78,7 @@ class Process(object):
     async def stop(self, int_timeout: float = 2, term_timeout: float = 2) -> Union[int, str]:
 
         if not self.is_running():
-            return "Process[%s]: Is not running, cannot stop" % self.uid()
+            return "'%s' is not running, cannot stop it" % self.uid()
 
         logger.debug("Process[%s](%d): stopping...", self.uid(), self._asyncio_process.pid)
         self._state_changed(ProcessData.STOPPING)
@@ -120,9 +120,11 @@ class Process(object):
 
             logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self.uid())
             kill_fn(pid, signal.SIGKILL)
-            # SIGKILL cannot be avoided
+            # SIGKILL cannot be avoided the exit code will be set
             while not self.has_exit_code():
                 await asyncio.sleep(.01)
+
+            return self.exit_code()
 
         except ProcessLookupError as ple:
             msg = f"Failed to find process with pid: '{self.uid()}' it is no longer running."
