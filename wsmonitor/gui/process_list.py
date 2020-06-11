@@ -9,6 +9,8 @@ from wsmonitor.process.data import ActionResponse, StateChangedEvent, ProcessDat
 
 class ProcessListWidget(QScrollArea):
     action_requested = Signal(str, str)
+    process_started = Signal(str)
+
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -53,9 +55,12 @@ class ProcessListWidget(QScrollArea):
             widget = ProcessWidget(new_process)
             self.process_widget_map[new_process.uid] = widget
             widget.actionRequested.connect(self.action_requested)
+            widget.onProcessStarted.connect(self.process_started)
             self.process_layout.insertWidget(0, widget)
 
         # TODO(mark): unknown processes
 
         self.process_data = self.process_data | updated_process_data
         self.lbl_default.setVisible(len(self.process_data) == 0)
+
+        return new_processes

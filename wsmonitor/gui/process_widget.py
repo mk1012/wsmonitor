@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
+from typing import List, Dict
 
 from PySide2 import QtCore, QtGui
 from PySide2.QtCore import Signal, Slot
-from PySide2.QtGui import QColor
-from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy, QStyle
+from PySide2.QtGui import QColor, QTextBlock, QTextCursor
+from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy, QStyle, QVBoxLayout, QTextEdit, \
+    QCheckBox, QTabWidget
 
 from wsmonitor.process.data import ProcessData
 
@@ -69,6 +71,7 @@ class BlinkBackgroundWidget(QWidget):
 
 class ProcessWidget(BlinkBackgroundWidget):
     actionRequested = Signal(str, str)
+    onProcessStarted = Signal(str)
 
     def __init__(self, process_data: ProcessData, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -104,10 +107,8 @@ class ProcessWidget(BlinkBackgroundWidget):
         self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         self.btn_restart.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
 
-
         self.btn_start_stop.clicked.connect(self._start_stop_clicked)
         self.btn_restart.clicked.connect(lambda: self.request_action("restart"))
-
 
         self.update_state(process_data.state, process_data.exit_code, True)
 
@@ -127,6 +128,8 @@ class ProcessWidget(BlinkBackgroundWidget):
     def on_action_completed(self, action_response):
         logger.debug("Action completed: %s", action_response)
         self._set_button_ui(self._process_data.state)  # make sure the conform to staet
+        if action_response in ("start", "restart"):
+            self.onProcessStarted.emit(self._process_data.uid)
 
     def _disable_buttons(self, disable=True):
         self.btn_start_stop.setDisabled(disable)
@@ -149,12 +152,72 @@ class ProcessWidget(BlinkBackgroundWidget):
 
     def _set_button_ui(self, state):
         is_running = state == ProcessData.STARTED
+        self.btn_start_stop.setDisabled(False)
+
         if is_running:
             self.btn_start_stop.setText("Stop")
-            self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
-        else:
+            self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
+        elif state == ProcessData.INITIALIZED or state == ProcessData.ENDED:
             self.btn_start_stop.setText("Start")
             self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
-
+        else:
+            self.btn_start_stop.setDisabled(True)
         self.btn_restart.setDisabled(not is_running)
-        self.btn_start_stop.setDisabled(False)
+
+
+class ProcessOutputTabsWidget(QTabWidget):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tabs: Dict[str, ProcessOutputTabWidget] = {}
+
+    def add_process_tab(self, uid: str):
+        logger.info(f"Added output tab for {uid}")
+        output = ProcessOutputTabWidget(self)
+        self.tabs[uid] = output
+        self.addTab(output, uid)
+
+    def append_output(self, uid, output):
+        tab = self.tabs[uid]
+        tab.append(output)
+
+    def process_started(self, uid: str):
+        tab = self.tabs[uid]
+        tab.start_output()
+        self.setCurrentWidget(tab)
+
+
+class ProcessOutputTabWidget(QWidget):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.layout = QVBoxLayout(self)
+        self.txt_output = QTextEdit(self)
+
+        policy = self.txt_output.sizePolicy()
+        policy.setHorizontalPolicy(QSizePolicy.Expanding)
+        policy.setHorizontalStretch(1)
+        policy.setVerticalPolicy(QSizePolicy.Expanding)
+        policy.setVerticalStretch(1)
+        self.txt_output.setSizePolicy(policy)
+        # self.layout.setStretch(0,True)
+        self.chb_clear_on_start = QCheckBox(self, text="Clear on start")
+        self.layout.addWidget(self.txt_output)
+        self.layout.addWidget(self.chb_clear_on_start)
+        self.setLayout(self.layout)
+        self.txt_output.setEnabled(False)
+
+    def clear(self):
+        self.txt_output.clear()
+
+    def append(self, output: str):
+        self.txt_output.moveCursor(QTextCursor.End)
+        self.txt_output.insertPlainText(output)
+
+    def start_output(self):
+        if self.chb_clear_on_start.isChecked():
+            self.clear()
+        else:
+            self.append("\n" + "-" * 10 + "BEGIN OUTPUT" + "-" * 10 + "\n")
+        self.setFocus()

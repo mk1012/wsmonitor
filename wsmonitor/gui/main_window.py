@@ -10,6 +10,7 @@ from PySide2.QtGui import QTextCursor
 from PySide2.QtWidgets import *
 
 from wsmonitor.gui.process_list import ProcessListWidget
+from wsmonitor.gui.process_widget import ProcessOutputTabsWidget
 from wsmonitor.process.data import ProcessSummaryEvent, StateChangedEvent, ActionResponse, OutputEvent
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class ProcessMonitorWindow(QMainWindow):
         self.client.textMessageReceived.connect(self.on_message)
 
         self.ui.process_list.action_requested.connect(self.on_action_requested)
+        self.ui.process_list.process_started.connect(self.on_process_started)
         self.ui.btn_connect.clicked.connect(self.on_connect_clicked)
 
     def on_connect_clicked(self):
@@ -54,7 +56,9 @@ class ProcessMonitorWindow(QMainWindow):
 
             if type == "ProcessSummaryEvent":
                 pdatas = ProcessSummaryEvent.from_json(payload)
-                self.ui.process_list.update_process_data(set(pdatas.processes))
+                new_processes = self.ui.process_list.update_process_data(set(pdatas.processes))
+                for process in new_processes:
+                    self.ui.tabs_output.add_process_tab(process.uid)
             if type == "StateChangedEvent":
                 state: StateChangedEvent = StateChangedEvent.from_json(payload)
                 self.ui.process_list.update_single_process_state(state)
@@ -70,6 +74,9 @@ class ProcessMonitorWindow(QMainWindow):
             logger.error("Could not retrieve expected field from JSON", exc_info=e)
         except Exception as e:
             logger.error("Unexpected exception on incomming message", exc_info=e)
+
+    def on_process_started(self, uid:str):
+        self.ui.tabs_output.process_started(uid)
 
     def on_action_requested(self, uid, action):
         logger.info("New action request: %s, %s", uid, action)
@@ -117,7 +124,7 @@ class ProcessMonitorUI(object):
         self.layout_connection.addWidget(self.btn_connect)
         self.process_list = ProcessListWidget()
 
-        self.txt_output = QTextEdit()
+        self.tabs_output = ProcessOutputTabsWidget()
 
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setMinimumSize(820, 540)
@@ -131,7 +138,7 @@ class ProcessMonitorUI(object):
 
         self.main_layout.addLayout(self.layout_connection)
         self.splitter.addWidget(self.process_list)
-        self.splitter.addWidget(self.txt_output)
+        self.splitter.addWidget(self.tabs_output)
         self.main_layout.addWidget(self.splitter)
 
         self.main_widget.setLayout(self.main_layout)
@@ -157,9 +164,8 @@ class ProcessMonitorUI(object):
         self.btn_connect.setDisabled(True)
         self.statusbar.showMessage("Connection established.")
 
-    def handle_output(self, output):
-        self.txt_output.moveCursor(QTextCursor.End)
-        self.txt_output.insertPlainText(output.output)
+    def handle_output(self, output:OutputEvent):
+        self.tabs_output.append_output(output.uid, output.output)
 
 
 def main():
