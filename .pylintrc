@@ -1,0 +1,17 @@
+[MESSAGES CONTROL]
+disable=missing-docstring,locally-disabled,locally-enabled,too-many-arguments, too-few-public-methods,too-many-instance-attributes,too-many-return-statements
+
+extension-pkg-whitelist=PySide2.QtCore,PySide2.QtGui,PySide2.QtWidgets,PySide2.QtWebSockets
+
+[FORMAT]
+max-line-length=120
+
+[REPORTS]
+output-format=colorized
+#reports=yes
+
+[MISCELLANEOUS]
+notes=FIXME,XXX
+
+[BASIC]
+good-names=i,j,k,db,ns,ex,_,logger, ui

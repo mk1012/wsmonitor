@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class ProcessMonitor(object):
+class ProcessMonitor:
 
     def __init__(self) -> None:
         self._is_monitor_running = False
@@ -25,10 +25,10 @@ class ProcessMonitor(object):
             logger.error(msg)
             return msg
 
-        p = Process(ProcessData(name, command, as_process_group))
-        self._processes[name] = p
+        process = Process(ProcessData(name, command, as_process_group))
+        self._processes[name] = process
         logger.info("Registered new process %s", name)
-        return p
+        return process
 
     def start_process(self, uid: str) -> Union[str, Process]:
 
@@ -105,4 +105,4 @@ class ProcessMonitor(object):
         logger.info("Monitor shutdown complete, all processes stopped")
 
     def get_processes(self) -> List[ProcessData]:
-        return [proc._data for proc in self._processes.values()]
+        return [proc.get_data() for proc in self._processes.values()]

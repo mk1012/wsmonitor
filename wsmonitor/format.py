@@ -1,7 +1,7 @@
 import json
 
 
-class JsonFormattable(object):
+class JsonFormattable:
     __slots__ = ()
 
     def to_json(self):

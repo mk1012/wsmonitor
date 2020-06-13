@@ -6,31 +6,17 @@ import websockets
 from websockets import WebSocketException
 
 from wsmonitor.process.data import ActionResponse, ActionFailure
-from wsmonitor.process.process import Process
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class ClientConnection():
-
-    def __init__(self, websocket):
-        self.websocket = websocket
-        self.is_active = True
-
-    def loop(self):
-        pass
-
-
-class ClientAction(object):
+class ClientAction:
 
     def __init__(self, action_id):
         self.action_id = action_id
 
-    def call_with_data(self, json_data: Dict[str, Any]):
-        raise NotImplementedError()
-
-    def __call__(self, *args, **kwargs):
+    async def call_with_data(self, json_data: Dict[str, Any]):
         raise NotImplementedError()
 
     def __str__(self):
@@ -78,15 +64,15 @@ class WebsocketActionServer:
     async def start_server(self, host="127.0.0.1", port=8766):
         self.server = await websockets.serve(self.__on_client_connected, host, port)
 
-    async def __on_client_connected(self, websocket, path):
+    async def __on_client_connected(self, websocket, _):
         # TODO(mark) is every listen()-invocation, run in its own task?
         self.clients.add(websocket)
         logger.info("Client added: %s", websocket)
 
         try:
             await self.__client_loop_may_throw(websocket)
-        except WebSocketException as e:
-            logger.info("WebSocket connection error: %s", e)
+        except WebSocketException as excpt:
+            logger.info("WebSocket connection error: %s", excpt)
 
         finally:
             self.clients.remove(websocket)
@@ -111,22 +97,22 @@ class WebsocketActionServer:
         for client in clients:
             try:
                 await client.send(line)
-            except WebSocketException as e:
-                logger.info("WS write failed: %s", e)
+            except WebSocketException as excpt:
+                logger.info("WS write failed: %s", excpt)
                 # TODO(mark): assumption: __on_client_connected will remove the failed websocket
 
     async def __handle_input_from_client(self, line: str) -> ActionResponse:
         try:
             json_data = json.loads(line)
-        except:
+        except json.JSONDecodeError:
             return ActionFailure(None, "invalid", "Received invalid input: %s" % line)
 
         action_name = json_data.get("action", None)
         payload = json_data.get("data", None)
         print(action_name, payload)
         if action_name not in self.known_actions or payload is None:
-            logger.warning(f"Invalid action {action_name}")
-            return ActionFailure(None, action_name, "Invalid action '%s' or missing data" % action_name)
+            logger.warning("Invalid action %s", action_name)
+            return ActionFailure(None, action_name, f"Invalid action '{action_name}' or missing data")
 
         action = self.known_actions[action_name]
         return await action.call_with_data(payload)

@@ -19,6 +19,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
 
         self.periodic_update_timeout = 30
         self.trigger_periodic_event = asyncio.Event()
+        self._is_running = False
 
         self.known_actions.update({
             "register": CallbackClientAction("register", ["uid", "cmd", "group"], self.__register_action),
@@ -69,8 +70,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         return ActionResponse(uid, "stop", success, result)
 
     async def _periodic_update_func(self) -> None:
-        self._is_running = True
-        while self._is_running:
+        while True:
 
             try:
                 await asyncio.wait_for(self.trigger_periodic_event.wait(), self.periodic_update_timeout)

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 import json
 import logging
 import sys
@@ -6,8 +5,8 @@ from json import JSONDecodeError
 
 from PySide2 import QtWebSockets
 from PySide2.QtCore import (QUrl, Qt)
-from PySide2.QtGui import QTextCursor
-from PySide2.QtWidgets import *
+from PySide2.QtWidgets import QMainWindow, QSplitter, QSizePolicy, QStatusBar, QApplication, QWidget, QVBoxLayout, \
+    QLineEdit, QPushButton, QStyle, QHBoxLayout
 
 from wsmonitor.gui.process_list import ProcessListWidget
 from wsmonitor.gui.process_widget import ProcessOutputTabsWidget
@@ -51,29 +50,29 @@ class ProcessMonitorWindow(QMainWindow):
         # logger.info("Incomming msg: %s" % message)
         try:
             json_data = json.loads(message)
-            type = json_data["type"]
+            msg_type = json_data["type"]
             payload = json_data["data"]
 
-            if type == "ProcessSummaryEvent":
+            if msg_type == "ProcessSummaryEvent":
                 pdatas = ProcessSummaryEvent.from_json(payload)
                 new_processes = self.ui.process_list.update_process_data(set(pdatas.processes))
                 for process in new_processes:
                     self.ui.tabs_output.add_process_tab(process.uid)
-            if type == "StateChangedEvent":
+            if msg_type == "StateChangedEvent":
                 state: StateChangedEvent = StateChangedEvent.from_json(payload)
                 self.ui.process_list.update_single_process_state(state)
-            if type == "ActionResponse":
+            if msg_type == "ActionResponse":
                 response = ActionResponse.from_json(payload)
                 self.ui.process_list.on_action_completed(response)
-            if type == "OutputEvent":
+            if msg_type == "OutputEvent":
                 output = OutputEvent.from_json(payload)
                 self.ui.handle_output(output)
-        except JSONDecodeError as e:
-            logger.error("Failed to parse message", exc_info=e)
-        except KeyError as e:
-            logger.error("Could not retrieve expected field from JSON", exc_info=e)
-        except Exception as e:
-            logger.error("Unexpected exception on incomming message", exc_info=e)
+        except JSONDecodeError as excpt:
+            logger.error("Failed to parse message", exc_info=excpt)
+        except KeyError as excpt:
+            logger.error("Could not retrieve expected field from JSON", exc_info=excpt)
+        except Exception as excpt:  # pylint: disable=broad-except
+            logger.error("Unexpected exception on incomming message", exc_info=excpt)
 
     def process_state_changed(self, uid: str, state: str):
         self.ui.tabs_output.process_state_changed(uid, state)
@@ -100,7 +99,7 @@ class ProcessMonitorWindow(QMainWindow):
         self.client.sendTextMessage(msg)
 
     def on_ws_error(self, error_code):
-        logger.error("WS Error, code: {}".format(error_code))
+        logger.error("WS Error, code: %s", error_code)
         error_msg = self.client.errorString()
         logger.error(error_msg)
 
@@ -111,7 +110,7 @@ class ProcessMonitorWindow(QMainWindow):
         self.client.close()
 
 
-class ProcessMonitorUI(object):
+class ProcessMonitorUI:
     def __init__(self, window: ProcessMonitorWindow):
         self.window = window
 
@@ -128,11 +127,11 @@ class ProcessMonitorUI(object):
 
         self.splitter = QSplitter(Qt.Horizontal)
         self.splitter.setMinimumSize(680, 540)
-        sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.splitter.sizePolicy().hasHeightForWidth())
-        self.splitter.setSizePolicy(sizePolicy)
+        policy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
+        policy.setHorizontalStretch(0)
+        policy.setVerticalStretch(0)
+        policy.setHeightForWidth(self.splitter.sizePolicy().hasHeightForWidth())
+        self.splitter.setSizePolicy(policy)
         self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 0)
 

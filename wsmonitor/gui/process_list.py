@@ -34,7 +34,7 @@ class ProcessListWidget(QScrollArea):
         self.setMinimumWidth(380)
 
     def on_action_completed(self, response: ActionResponse):
-        logger.info(f"Action completed: {response}")
+        logger.info("Action completed: %s", response)
         self.process_widget_map[response.uid].on_action_completed(response.action)
 
     def update_single_process_state(self, event: StateChangedEvent):
@@ -43,7 +43,7 @@ class ProcessListWidget(QScrollArea):
     def update_process_data(self, updated_process_data: Set[ProcessData]):
         known_processes = updated_process_data & self.process_data
         new_processes = updated_process_data - self.process_data
-        unknown_processes = updated_process_data - self.process_data
+        # unknown_processes = updated_process_data - self.process_data
 
         # TODO(mark): update process data sets with new data
         for known_process in known_processes:

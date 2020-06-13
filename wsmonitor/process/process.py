@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 
-class ProcessOutput(object):
+class ProcessOutput:
 
     def __init__(self) -> None:
         self.stdout = []
@@ -26,22 +26,21 @@ class ProcessOutput(object):
 
 
 StateChangeCallback = Callable[['Process'], None]
-ProcessCallback = Callable[['Process', str], None]
+OutputCallback = Callable[['Process', str], None]
 
 
-class Process(object):
+class Process:
     def __init__(self, process_data: ProcessData) -> None:
         self._data = process_data
-        self._asyncio_process: Optional[asyncio.subprocess.Process] = None
-
+        self._asyncio_process: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
         self._process_task: Optional[asyncio.Task] = None
         self._state_change_listener: Optional[StateChangeCallback] = None
-        self._output_listener: Optional[ProcessCallback] = None
+        self._output_listener: Optional[OutputCallback] = None
 
     def set_state_listener(self, listener: StateChangeCallback) -> None:
         self._state_change_listener = listener
 
-    def set_output_listener(self, listener: ProcessCallback) -> None:
+    def set_output_listener(self, listener: OutputCallback) -> None:
         self._output_listener = listener
 
     async def _run_process(self) -> int:
@@ -91,49 +90,16 @@ class Process(object):
                 pid = os.getpgid(pid)
                 kill_fn = os.killpg
 
-            # politely ask to interrupt the process
-            kill_fn(pid, signal.SIGINT)
-            # wait shortly to see if already stopped
-            await asyncio.sleep(.01)
-            # NOTE: we check for the exit code, which is only set at the end of start
-            # _run_process and should indicate that the process has truly exited
-            if self.has_exit_code():
-                return self.exit_code()
+            return await self._ensure_killed_may_raise(kill_fn, pid, int_timeout, term_timeout)
 
-            # sleep in chunks and test if process has stopped
-            sleep_interval = .5
-            while int_timeout > 0:
-                await asyncio.sleep(min(sleep_interval, int_timeout))
-                int_timeout -= sleep_interval
-
-                if self.has_exit_code():
-                    return self.exit_code()
-
-            logger.debug("Process[%s]: Stopping, escalating to SIGTERM", self.uid())
-            kill_fn(pid, signal.SIGTERM)
-            while term_timeout > 0:
-                await asyncio.sleep(min(sleep_interval, term_timeout))
-                term_timeout -= sleep_interval
-
-                if self.has_exit_code():
-                    return self.exit_code()
-
-            logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self.uid())
-            kill_fn(pid, signal.SIGKILL)
-            # SIGKILL cannot be avoided the exit code will be set
-            while not self.has_exit_code():
-                await asyncio.sleep(.01)
-
-            return self.exit_code()
-
-        except ProcessLookupError as ple:
+        except ProcessLookupError:
             msg = f"Failed to find process with pid: '{self.uid()}' it is no longer running."
             logger.warning(msg)
             return msg
 
-        except OSError as e:
-            logger.warning("Exception stopping process", exc_info=e)
-            return "Exception while stopping process %s" % e.__class__.__name__
+        except OSError as error:
+            logger.warning("Exception stopping process", exc_info=error)
+            return "Exception while stopping process %s" % error.__class__.__name__
 
     async def restart_ended_process(self):
         if self._data.state != ProcessData.ENDED:
@@ -206,3 +172,41 @@ class Process(object):
 
     def state(self) -> str:
         return self._data.state
+
+    def get_data(self) -> ProcessData:
+        return self._data
+
+    async def _ensure_killed_may_raise(self, kill_fn, pid, int_timeout: float = 2, term_timeout: float = 2):
+        # politely ask to interrupt the process
+        kill_fn(pid, signal.SIGINT)
+        # wait shortly to see if already stopped
+        await asyncio.sleep(.01)
+        # NOTE: we check for the exit code, which is only set at the end of start
+        # _run_process and should indicate that the process has truly exited
+        if self.has_exit_code():
+            return self.exit_code()
+
+        # sleep in chunks and test if process has stopped
+        sleep_interval = .5
+        while int_timeout > 0:
+            await asyncio.sleep(min(sleep_interval, int_timeout))
+            int_timeout -= sleep_interval
+
+            if self.has_exit_code():
+                return self.exit_code()
+
+        logger.debug("Process[%s]: Stopping, escalating to SIGTERM", self.uid())
+        kill_fn(pid, signal.SIGTERM)
+        while term_timeout > 0:
+            await asyncio.sleep(min(sleep_interval, term_timeout))
+            term_timeout -= sleep_interval
+
+            if self.has_exit_code():
+                return self.exit_code()
+
+        logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self.uid())
+        kill_fn(pid, signal.SIGKILL)
+
+        # SIGKILL cannot be avoided the exit code will be set
+        while not self.has_exit_code():
+            await asyncio.sleep(.01)

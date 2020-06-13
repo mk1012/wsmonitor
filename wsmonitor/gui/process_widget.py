@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 import logging
-from typing import List, Dict
+from typing import Dict
 
 from PySide2 import QtCore, QtGui
 from PySide2.QtCore import Signal, Slot
-from PySide2.QtGui import QColor, QTextBlock, QTextCursor
+from PySide2.QtGui import QColor, QTextCursor, Qt
 from PySide2.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QSizePolicy, QStyle, QVBoxLayout, QTextEdit, \
     QCheckBox, QTabWidget, QHBoxLayout
 
@@ -26,10 +25,10 @@ colors = {
 def get_color_for_process(data: ProcessData):
     if data.has_ended_successfully():
         return colors[ProcessData.ENDED + "_success"]
-    elif data.is_in_state(ProcessData.ENDED):
+    if data.is_in_state(ProcessData.ENDED):
         return colors[ProcessData.ENDED + "_failure"]
-    else:
-        return colors[data.state]
+
+    return colors[data.state]
 
 
 class BlinkBackgroundWidget(QWidget):
@@ -119,13 +118,13 @@ class ProcessWidget(BlinkBackgroundWidget):
         action = "stop" if self._process_data.is_in_state(ProcessData.STARTED) else "start"
         self.request_action(action)
 
-    def request_action(self, action):
+    def request_action(self, action: str):
         logger.debug("Requesting action: %s", action)
         self._disable_buttons(True)
         self.actionRequested.emit(self._process_data.uid, action)
 
     @Slot(str)
-    def on_action_completed(self, action_response):
+    def on_action_completed(self, action_response: str):
         logger.debug("Action completed: %s", action_response)
         self._set_button_ui(self._process_data.state)  # make sure the conform to state
 
@@ -137,7 +136,7 @@ class ProcessWidget(BlinkBackgroundWidget):
         logger.debug("Process data updated: %s", process_data)
         self.update_state(process_data.state, process_data.exit_code)
 
-    def update_state(self, state, exit_code, state_changed=False):
+    def update_state(self, state: str, exit_code: int, state_changed=False):
         self._process_data.exit_code = exit_code
         self._set_button_ui(state)
 
@@ -148,14 +147,14 @@ class ProcessWidget(BlinkBackgroundWidget):
             self.change_bg_color_with_blink(get_color_for_process(self._process_data))
             self.process_state_changed.emit(self._process_data.uid, state)
 
-    def _set_button_ui(self, state):
+    def _set_button_ui(self, state: str):
         is_running = state == ProcessData.STARTED
         self.btn_start_stop.setDisabled(False)
 
         if is_running:
             self.btn_start_stop.setText("Stop")
             self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
-        elif state == ProcessData.INITIALIZED or state == ProcessData.ENDED:
+        elif state in (ProcessData.INITIALIZED, ProcessData.ENDED):
             self.btn_start_stop.setText("Start")
             self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
         else:
@@ -170,12 +169,12 @@ class ProcessOutputTabsWidget(QTabWidget):
         self.tabs: Dict[str, ProcessOutputTabWidget] = {}
 
     def add_process_tab(self, uid: str):
-        logger.info(f"Added output tab for {uid}")
+        logger.info("Added output tab for %s", uid)
         output = ProcessOutputTabWidget(self)
         self.tabs[uid] = output
         self.addTab(output, uid)
 
-    def append_output(self, uid, output):
+    def append_output(self, uid: str, output: str):
         tab = self.tabs[uid]
         tab.append(output)
 
@@ -191,7 +190,7 @@ class ProcessOutputTabWidget(QWidget):
     STARTED_OUTPUT_LINE = "\n" + "-" * 19 + " OUTPUT STARTED " + "-" * 19 + "\n\n"
     ENDED_OUTPUT_LINE = "\n" + "-" * 20 + " OUTPUT ENDED " + "-" * 20 + "\n"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
         self.layout = QVBoxLayout(self)
@@ -203,6 +202,7 @@ class ProcessOutputTabWidget(QWidget):
         policy.setVerticalPolicy(QSizePolicy.MinimumExpanding)
         policy.setVerticalStretch(1)
         self.txt_output.setSizePolicy(policy)
+        self.txt_output.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         # self.layout.setStretch(0,True)
         self.layout.addWidget(self.txt_output)
 
@@ -219,14 +219,14 @@ class ProcessOutputTabWidget(QWidget):
 
         self.btn_clear.clicked.connect(self.clear)
 
-    def clear(self):
+    def clear(self) -> None:
         self.txt_output.clear()
 
     def append(self, output: str):
         self.txt_output.moveCursor(QTextCursor.End)
         self.txt_output.insertPlainText(output)
 
-    def process_state_changed(self, state):
+    def process_state_changed(self, state: str) -> None:
         if state == ProcessData.STARTED:
             if self.chb_clear_on_start.isChecked():
                 self.clear()
@@ -234,4 +234,5 @@ class ProcessOutputTabWidget(QWidget):
                 self.append(self.STARTED_OUTPUT_LINE)
 
         elif state == ProcessData.ENDED:
-            self.append(self.ENDED_OUTPUT_LINE)
+            if not self.chb_clear_on_start.isChecked():
+                self.append(self.ENDED_OUTPUT_LINE)

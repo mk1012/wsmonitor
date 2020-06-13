@@ -44,8 +44,9 @@ class ProcessData(JsonFormattable):
         if self.state == ProcessData.ENDED:
             if self.exit_code == 0:
                 return f"Exited with {self.exit_code}"
-            else:
-                return f"Exited(failed) with {self.exit_code}"
+
+            return f"Exited(failed) with {self.exit_code}"
+
         return self.state
 
     def has_ended_successfully(self):

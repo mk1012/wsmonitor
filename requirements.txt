@@ -1,0 +1,4 @@
+websockets~=8.1
+click~=7.1.2
+setuptools~=46.4.0
+PySide2~=5.15.0
