@@ -59,7 +59,8 @@ class ProcessMonitor:
         if isinstance(result, str):
             return f"Failed to stop process, cannot restart: {result}"
 
-        return self.start_process(uid)
+        process = self._processes[uid]
+        return process.restart_ended_process()
 
     def _get_monitor_tasks(self) -> List[asyncio.Task]:
         # TODO: combine output events?

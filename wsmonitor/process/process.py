@@ -86,6 +86,7 @@ class Process:
             # deal with process or process group
             kill_fn = os.kill
             pid = self._asyncio_process.pid
+
             if self._data.as_process_group:
                 pid = os.getpgid(pid)
                 kill_fn = os.killpg
@@ -97,13 +98,13 @@ class Process:
             logger.warning(msg)
             return msg
 
-        except OSError as error:
-            logger.warning("Exception stopping process", exc_info=error)
-            return "Exception while stopping process %s" % error.__class__.__name__
+        except OSError as excpt:
+            logger.warning("Exception stopping process", exc_info=excpt)
+            return "Exception while stopping process %s" % excpt.__class__.__name__
 
-    async def restart_ended_process(self):
+    def restart_ended_process(self):
         if self._data.state != ProcessData.ENDED:
-            msg = "Process cannot be re-started in state: %s" % self._data.state
+            msg = f"Process {self.uid()} cannot be re-started in state: {self._data.state}"
             logger.warning(msg)
             return msg
 
