@@ -32,7 +32,7 @@ class ProcessMonitorWindow(QMainWindow):
         self.client.textMessageReceived.connect(self.on_message)
 
         self.ui.process_list.action_requested.connect(self.on_action_requested)
-        self.ui.process_list.process_started.connect(self.on_process_started)
+        self.ui.process_list.process_state_changed.connect(self.process_state_changed)
         self.ui.btn_connect.clicked.connect(self.on_connect_clicked)
 
     def on_connect_clicked(self):
@@ -75,8 +75,8 @@ class ProcessMonitorWindow(QMainWindow):
         except Exception as e:
             logger.error("Unexpected exception on incomming message", exc_info=e)
 
-    def on_process_started(self, uid:str):
-        self.ui.tabs_output.process_started(uid)
+    def process_state_changed(self, uid: str, state: str):
+        self.ui.tabs_output.process_state_changed(uid, state)
 
     def on_action_requested(self, uid, action):
         logger.info("New action request: %s, %s", uid, action)
@@ -127,13 +127,13 @@ class ProcessMonitorUI(object):
         self.tabs_output = ProcessOutputTabsWidget()
 
         self.splitter = QSplitter(Qt.Horizontal)
-        self.splitter.setMinimumSize(820, 540)
+        self.splitter.setMinimumSize(680, 540)
         sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.splitter.sizePolicy().hasHeightForWidth())
         self.splitter.setSizePolicy(sizePolicy)
-        self.splitter.setStretchFactor(0, 10)
+        self.splitter.setStretchFactor(0, 1)
         self.splitter.setStretchFactor(1, 0)
 
         self.main_layout.addLayout(self.layout_connection)
@@ -154,7 +154,7 @@ class ProcessMonitorUI(object):
         window.setWindowIcon(window.style().standardIcon(QStyle.SP_BrowserReload))
         self.set_disconnected_ui("Click on Connect to establish a connection")
 
-    def set_disconnected_ui(self, msg:str):
+    def set_disconnected_ui(self, msg: str):
         self.process_list.setDisabled(True)
         self.btn_connect.setDisabled(False)
         self.statusbar.showMessage(f"Disconnected. {msg}")
@@ -164,7 +164,7 @@ class ProcessMonitorUI(object):
         self.btn_connect.setDisabled(True)
         self.statusbar.showMessage("Connection established.")
 
-    def handle_output(self, output:OutputEvent):
+    def handle_output(self, output: OutputEvent):
         self.tabs_output.append_output(output.uid, output.output)
 
 

@@ -9,8 +9,7 @@ from wsmonitor.process.data import ActionResponse, StateChangedEvent, ProcessDat
 
 class ProcessListWidget(QScrollArea):
     action_requested = Signal(str, str)
-    process_started = Signal(str)
-
+    process_state_changed = Signal(str, str)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -19,7 +18,7 @@ class ProcessListWidget(QScrollArea):
 
         self.main_widget = QWidget()
         self.process_layout = QVBoxLayout()
-        self.process_layout.setContentsMargins(2,2,2,2)
+        self.process_layout.setContentsMargins(2, 2, 2, 2)
         self.main_widget.setLayout(self.process_layout)
 
         self.lbl_default = QLabel(text="No processes found")
@@ -32,7 +31,7 @@ class ProcessListWidget(QScrollArea):
         self.setWidgetResizable(True)
         self.setWidget(self.main_widget)
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(380)
 
     def on_action_completed(self, response: ActionResponse):
         logger.info(f"Action completed: {response}")
@@ -55,7 +54,7 @@ class ProcessListWidget(QScrollArea):
             widget = ProcessWidget(new_process)
             self.process_widget_map[new_process.uid] = widget
             widget.actionRequested.connect(self.action_requested)
-            widget.onProcessStarted.connect(self.process_started)
+            widget.process_state_changed.connect(self.process_state_changed)
             self.process_layout.insertWidget(0, widget)
 
         # TODO(mark): unknown processes
