@@ -1,23 +1,46 @@
 import asyncio
 import json
+from typing import Optional
 
 import websockets
 
-
-async def hello():
-    uri = "ws://localhost:8766"
-    async with websockets.connect(uri) as websocket:
-        data = json.dumps({"cmd": "source ~/Arbeit_IPR/ws/devel/setup.bash && roslaunch rll_move move_iface.launch", "action": "register", "name": "Mark2"})
-        await websocket.send(data)
-        data = json.dumps({"data": {"uid": "test"}, "action": "test"})
-        await websocket.send(data)
-        data = json.dumps({"data": {"uid": "test"}, "action": "stop"})
-        await websocket.send(data)
-        data = json.dumps({"data": {"uid": "test"}, "action": "start"})
-        await websocket.send(data)
-        while True:
-            data = await websocket.recv()
-            print(data)
+from wsmonitor.scripts import util
 
 
-asyncio.get_event_loop().run_until_complete(hello())
+class WSMonitorClient:
+
+    def __init__(self):
+        self.is_running = False
+        self.websocket: Optional[websockets.WebSocketClientProtocol] = None
+
+    async def connect(self, host="127.0.0.1", port=8766):
+        uri = f"ws://{host}:{port}"
+        self.websocket = await websockets.connect(uri)
+
+    async def action(self, action_name: str, uid: str):
+        data = json.dumps({"action": action_name, "data": {"uid": uid}})
+        await self.websocket.send(data)
+
+        # while True:
+        #    data = await self.websocket.recv()
+        #    print(data)
+
+    async def close(self):
+        await self.websocket.close()
+        await self.websocket.wait_closed()
+
+
+if __name__ == "__main__":
+    client = WSMonitorClient()
+
+
+    async def main():
+        await client.connect()
+        await client.action("start", "ping")
+
+
+    async def shutdown():
+        await client.close()
+
+
+    util.run(main(), shutdown())

@@ -4,6 +4,7 @@ import signal
 import sys
 
 from wsmonitor.process.process_monitor import ProcessMonitor
+from wsmonitor.scripts import util
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(lineno)d -  %(message)s")
@@ -19,19 +20,12 @@ if __name__ == '__main__':
         reg.start_process("py")
         reg.start_process("ping")
 
-        await reg.start_monitor()
+        reg.start_monitor()
 
 
-    def shutdown_handler():
-        loop.create_task(reg.shutdown_monitor())
-
-
-    loop.set_debug(True)
-    loop.add_signal_handler(signal.SIGINT, shutdown_handler)
-    loop.add_signal_handler(signal.SIGTERM, shutdown_handler)
-
-    try:
-        loop.run_until_complete(populate())
-    finally:
+    async def shutdown():
+        await reg.shutdown()
         loop.stop()
-        loop.close()
+
+
+    util.run(populate(), shutdown())

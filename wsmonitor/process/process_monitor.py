@@ -68,11 +68,10 @@ class ProcessMonitor:
         output_task = asyncio.create_task(self._process_queue(self._output_event_queue, self.on_output_event))
         return [state_task, output_task]
 
-    def start_monitor(self) -> asyncio.Future:
+    def start_monitor(self):
         self._is_monitor_running = True
         tasks = self._get_monitor_tasks()
         self._gather_monitoring_tasks_future = asyncio.gather(*tasks)
-        return self._gather_monitoring_tasks_future
 
     async def on_state_event(self, event):
         pass  # print("State event", event)
@@ -85,7 +84,7 @@ class ProcessMonitor:
             event = await queue.get()
             await handler(event)
 
-    async def shutdown_monitor(self) -> None:
+    async def shutdown(self) -> None:
         running = list(filter(lambda proc: proc.is_running(), self._processes.values()))
         logger.info("Initiating monitor shutdown, stopping %d running processes", len(running))
 

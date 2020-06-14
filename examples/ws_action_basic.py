@@ -18,7 +18,7 @@ def main():
     loop.set_debug(True)
 
     def shutdown_handler():
-        wpm.shutdown_server()
+        wpm.stop_server()
 
     loop.add_signal_handler(signal.SIGINT, shutdown_handler)
     loop.add_signal_handler(signal.SIGTERM, shutdown_handler)

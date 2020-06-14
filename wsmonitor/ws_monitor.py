@@ -55,13 +55,14 @@ class WebsocketActionServer:
         self.known_actions[name] = action
         return True
 
-    async def shutdown_server(self):
+    async def stop_server(self):
         logger.info("Server shutdown triggered")
         self.server.close()
         await self.server.wait_closed()
         logger.info("Server closed")
 
     async def start_server(self, host="127.0.0.1", port=8766):
+        logger.info("Starting server on %s:%d", host, port)
         self.server = await websockets.serve(self.__on_client_connected, host, port)
 
     async def __on_client_connected(self, websocket, _):

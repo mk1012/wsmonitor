@@ -31,11 +31,18 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
     async def welcome_client(self, websocket: websockets.WebSocketClientProtocol):
         await websocket.send(str(ProcessSummaryEvent(self.get_processes())))
 
-    async def run(self):
-        # TODO(mark): the server seems to case problems with other task (they are not scheduled?)
+    async def run(self, host="127.0.0.1", port=8766):
+        # TODO(mark): the server seems to cause problems with other task (they are not scheduled?)
         # therefore start in another task
-        asyncio.create_task(self.start_server())
+        asyncio.create_task(self.start_server(host, port))
         self.start_monitor()
+
+    async def shutdown(self):
+        logger.info("Shutdown initiated")
+
+        # stop process monitor and websocket server
+        await ProcessMonitor.shutdown(self)
+        await self.stop_server()
 
     async def __register_action(self, uid: str, cmd: str, group=True) -> ActionResponse:
         result = self.register_process(uid, cmd, group)
@@ -95,10 +102,3 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
     async def on_output_event(self, event: OutputEvent):
         logger.debug("Received output event: %s", str(event))
         await self.broadcast(str(event))
-
-    async def shutdown(self):
-        logger.info("Shutdown initiated")
-
-        # stop process monitor and
-        await self.shutdown_monitor()
-        await self.shutdown_server()

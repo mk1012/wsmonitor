@@ -97,7 +97,5 @@ class ActionResponse(JsonFormattable):
         self.data = data
 
 
-class ActionFailure(ActionResponse):
-
-    def __init__(self, uid: Optional[str], action: str, msg: Union[Dict, str]):
-        super().__init__(uid, action, False, data=msg)
+def ActionFailure(uid: Optional[str], action: str, msg: Union[Dict, str]):
+    return ActionResponse(uid, action, False, data=msg)
