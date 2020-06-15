@@ -3,12 +3,12 @@ import logging
 from typing import Dict, List, Any, Callable, Awaitable, Optional
 
 import websockets
-from websockets import WebSocketException
+from websockets import WebSocketException, ConnectionClosedOK
 
 from wsmonitor.process.data import ActionResponse, ActionFailure
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 class ClientAction:
@@ -68,16 +68,18 @@ class WebsocketActionServer:
     async def __on_client_connected(self, websocket, _):
         # TODO(mark) is every listen()-invocation, run in its own task?
         self.clients.add(websocket)
-        logger.info("Client added: %s", websocket)
+        logger.debug("Client added: %s", websocket)
 
         try:
             await self.__client_loop_may_throw(websocket)
+        except ConnectionClosedOK:
+            pass
         except WebSocketException as excpt:
             logger.info("WebSocket connection error: %s", excpt)
 
         finally:
             self.clients.remove(websocket)
-            logger.info("Client removed: %s", websocket)
+            logger.debug("Client removed: %s", websocket)
 
     async def welcome_client(self, websocket):
         pass
@@ -99,7 +101,7 @@ class WebsocketActionServer:
             try:
                 await client.send(line)
             except WebSocketException as excpt:
-                logger.info("WS write failed: %s", excpt)
+                logger.warning("WS write failed: %s", excpt)
                 # TODO(mark): assumption: __on_client_connected will remove the failed websocket
 
     async def __handle_input_from_client(self, line: str) -> ActionResponse:
@@ -110,7 +112,7 @@ class WebsocketActionServer:
 
         action_name = json_data.get("action", None)
         payload = json_data.get("data", None)
-        print(action_name, payload)
+
         if action_name not in self.known_actions or payload is None:
             logger.warning("Invalid action %s", action_name)
             return ActionFailure(None, action_name, f"Invalid action '{action_name}' or missing data")

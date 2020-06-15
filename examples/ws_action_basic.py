@@ -2,7 +2,6 @@ import asyncio
 import logging
 import signal
 
-logging.basicConfig(level=logging.DEBUG)
 from wsmonitor.ws_monitor import WebsocketActionServer, ClientAction, CallbackClientAction
 
 

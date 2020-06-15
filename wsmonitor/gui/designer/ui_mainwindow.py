@@ -9,10 +9,10 @@
 ################################################################################
 
 from PySide2.QtCore import (QCoreApplication, QDate, QDateTime, QMetaObject,
-    QObject, QPoint, QRect, QSize, QTime, QUrl, Qt)
+                            QObject, QPoint, QRect, QSize, QTime, QUrl, Qt)
 from PySide2.QtGui import (QBrush, QColor, QConicalGradient, QCursor, QFont,
-    QFontDatabase, QIcon, QKeySequence, QLinearGradient, QPalette, QPainter,
-    QPixmap, QRadialGradient)
+                           QFontDatabase, QIcon, QKeySequence, QLinearGradient, QPalette, QPainter,
+                           QPixmap, QRadialGradient)
 from PySide2.QtWidgets import *
 
 from process_widget import ProcessWidget
@@ -53,21 +53,25 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
 
         QMetaObject.connectSlotsByName(MainWindow)
+
     # setupUi
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"MainWindow", None))
     # retranslateUi
 
+
 import sys
 from PySide2.QtWidgets import QApplication, QMainWindow
 from PySide2.QtCore import QFile
+
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super(MainWindow, self).__init__()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

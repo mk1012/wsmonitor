@@ -1,10 +1,15 @@
-import json
-
 import click
+import json
+import logging
 
 from examples.ws_client import run_single_action_client
 from wsmonitor.gui import main_window
 from wsmonitor.scripts import wsmon
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+
+
+# logging.getLogger().addHandler(logging.StreamHandler())
 
 
 class ServerConfig:
@@ -20,10 +25,14 @@ pass_config = click.make_pass_decorator(ServerConfig, ensure=True)
 @click.group()
 @click.option("--host", default="127.0.0.1", help="The host the server is running on")
 @click.option("--port", default=8765, help="The port the server is running on")
+@click.option("--verbose", is_flag="True", help="Enable verbose output.")
 @pass_config
-def cli(config: ServerConfig, host: str, port: int):
+def cli(config: ServerConfig, host: str, port: int, verbose: bool):
     config.host = host
     config.port = port
+    if verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
 
 @cli.command()
 @pass_config
@@ -33,6 +42,7 @@ def gui(config: ServerConfig):
     """
     click.echo('Starting the GUI: %s' % config)
     main_window.main()
+
 
 @cli.command()
 @click.option("--initial", default=None, type=click.File("r"), help="JSON file with the initial processes to load")
@@ -87,6 +97,7 @@ def stop(config: ServerConfig, uid: str):
     Stops the process with the given unique id.
     """
     click.echo(f'Stop {uid}')
+    run_single_action_client(config.host, config.port, "stop", uid=uid)
 
 
 @cli.command()
@@ -94,10 +105,11 @@ def stop(config: ServerConfig, uid: str):
 @pass_config
 def output(config: ServerConfig, uid: str):
     """
-    Stops the process with the given unique id.
+    Logs the output reported from the ProcessMonitor.
     """
     click.echo(f'Output')
     run_single_action_client(config.host, config.port, "output")
+
 
 @cli.command(name="list")
 @click.option("--json", "as_json", is_flag=True, help="Output the process list as simple text not json.")

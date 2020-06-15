@@ -5,12 +5,8 @@ import sys
 from wsmonitor.util import run
 from wsmonitor.ws_process_monitor import WebsocketProcessMonitor
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 
 def main(host, port, config_file=None):
-
     wpm = WebsocketProcessMonitor()
 
     if config_file is not None:

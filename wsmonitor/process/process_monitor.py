@@ -7,7 +7,7 @@ from wsmonitor.process.process import Process
 from wsmonitor.process.data import ProcessData, OutputEvent, StateChangedEvent
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 class ProcessMonitor:

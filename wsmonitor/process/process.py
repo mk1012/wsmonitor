@@ -52,7 +52,7 @@ class Process:
 
         logger.debug("Process[%s]: starting", self._data.uid)
         self._asyncio_process = await asyncio.create_subprocess_shell(
-            self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn,bufsize=0)
+            self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn, bufsize=0)
 
         self._state_changed(ProcessData.STARTED)
 
@@ -77,7 +77,7 @@ class Process:
     async def stop(self, int_timeout: float = 2, term_timeout: float = 2) -> Union[int, str]:
 
         if not self.is_running():
-            return "'%s' is not running, cannot stop it" % self.uid()
+            return f"'{self.uid()}' is not running, cannot stop it"
 
         logger.debug("Process[%s](%d): stopping...", self.uid(), self._asyncio_process.pid)
         self._state_changed(ProcessData.STOPPING)
@@ -211,3 +211,5 @@ class Process:
         # SIGKILL cannot be avoided the exit code will be set
         while not self.has_exit_code():
             await asyncio.sleep(.01)
+
+        return self.exit_code()

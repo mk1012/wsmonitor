@@ -173,7 +173,7 @@ class ProcessMonitorUI:
 
 def main(host: str = "127.0.0.1", port: int = 8765):
     app = QApplication(sys.argv)
-    signal.signal(signal.SIGINT, lambda _, _1: app.quit())
+    signal.signal(signal.SIGINT, lambda _, _1: app.quit())  # TODO: doesn't work
 
     window = ProcessMonitorWindow()
     window.establish_connection(f"ws://{host}:{port}/")

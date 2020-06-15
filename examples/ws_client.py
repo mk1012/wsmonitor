@@ -137,12 +137,16 @@ def run_single_action_client(host: str, port: int, action_name: str, **kwargs):
             logger.info("Waiting 1sec to re-connect")
             await asyncio.sleep(1)
 
+        result = None
         if action_name == "output":
             async def on_output(event: OutputEvent):
-                logger.info(event.output)
+                print(event.output, end="")
 
             client._on_output = on_output
-            result = await client.get_read_task()
+            try:
+                await client.get_read_task()
+            except asyncio.CancelledError:
+                pass
         else:
             result = await client.action(action_name, **kwargs)
 

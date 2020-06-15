@@ -8,7 +8,7 @@ from wsmonitor.process.process_monitor import ProcessMonitor
 from wsmonitor.ws_monitor import WebsocketActionServer, CallbackClientAction
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 
 class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
@@ -75,7 +75,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
 
     async def __stop_action(self, uid: str) -> ActionResponse:
         result = await self.stop_process(uid)
-        success = isinstance(result, str)
+        success = isinstance(result, int)
         if success:
             self.trigger_periodic_event.set()
 
@@ -89,7 +89,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
             except asyncio.TimeoutError:
                 pass
 
-            logger.info("Triggered periodic update. Via event: %s", self.trigger_periodic_event.is_set())
+            logger.debug("Triggered periodic update. Via event: %s", self.trigger_periodic_event.is_set())
             self.trigger_periodic_event.clear()
             event = ProcessSummaryEvent(self.get_processes())
             await self.broadcast(event.to_json_str())

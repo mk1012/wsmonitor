@@ -16,7 +16,7 @@ def run(run: Coroutine, shutdown: Optional[Callable[[], Coroutine]] = None):
     # and make sure to call our custom shutdown methods
 
     loop = asyncio.get_event_loop()
-    loop.set_debug(True)
+    # loop.set_debug(True)
     main_task = loop.create_task(run)
 
     async def initiate_shutdown():
