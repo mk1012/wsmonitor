@@ -19,16 +19,28 @@ class ProcessMonitor:
         self._output_event_queue = asyncio.Queue()
         self._gather_monitoring_tasks_future: Optional[Task] = None
 
-    def register_process(self, name, command, as_process_group=True) -> Union[str, Process]:
-        if name in self._processes:
-            msg = f"Process with name '{name}' already known"
+    def register_process(self, uid: str, command: str, as_process_group: bool = True) -> Union[str, Process]:
+        if uid in self._processes:
+            msg = f"Process with name '{uid}' already known"
             logger.error(msg)
             return msg
 
-        process = Process(ProcessData(name, command, as_process_group))
-        self._processes[name] = process
-        logger.info("Registered new process %s", name)
+        process = Process(ProcessData(uid, command, as_process_group))
+        self._processes[uid] = process
+        logger.info("Registered new process %s", uid)
         return process
+
+    def unregister_process(self, uid: str) -> Union[str, bool]:
+        if uid not in self._processes:
+            return f"Process with name '{uid}' is not known."
+
+        process = self._processes[uid]
+        if process.is_running():
+            return f"Process '{uid}' is running. It cannot be removed in the running state."
+
+        del self._processes[uid]
+        logger.info("Removed process %s", uid)
+        return True
 
     def start_process(self, uid: str) -> Union[str, Process]:
 

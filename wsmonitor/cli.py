@@ -25,12 +25,15 @@ pass_config = click.make_pass_decorator(ServerConfig, ensure=True)
 @click.group()
 @click.option("--host", default="127.0.0.1", help="The host the server is running on")
 @click.option("--port", default=8765, help="The port the server is running on")
-@click.option("--verbose", is_flag="True", help="Enable verbose output.")
+@click.option("-v", is_flag="True", help="Enable verbose output.")
+@click.option("-vv", is_flag="True", help="Enable verbose verbose output.")
 @pass_config
-def cli(config: ServerConfig, host: str, port: int, verbose: bool):
+def cli(config: ServerConfig, host: str, port: int, v: bool, vv: bool):
     config.host = host
     config.port = port
-    if verbose:
+    if v:
+        logging.getLogger().setLevel(logging.INFO)
+    if vv:
         logging.getLogger().setLevel(logging.DEBUG)
 
 
@@ -64,8 +67,19 @@ def add(config: ServerConfig, uid: str, cmd: str, as_group: bool):
     """
     Adds a new process with the given unique id and executes the specified command once started.
     """
-    click.echo(f'Add command {uid}="{cmd}" group={as_group}')
-    run_single_action_client(config.host, config.port, "register", uid=uid, cmd=cmd, group=as_group)
+    result = run_single_action_client(config.host, config.port, "register", uid=uid, cmd=cmd, group=as_group)
+    click.echo(f'Add command {uid}="{cmd}" group={as_group} -> {result}')
+
+
+@cli.command()
+@click.argument("uid")
+@pass_config
+def remove(config: ServerConfig, uid: str):
+    """
+    Removes the process with the given unique id.
+    """
+    result = run_single_action_client(config.host, config.port, "remove", uid=uid)
+    click.echo(f'Remove command {uid}="{cmd}" group={as_group} -> {result}')
 
 
 @cli.command()
@@ -87,6 +101,7 @@ def restart(config: ServerConfig, uid: str):
     Re-starts the process with the given unique id.
     """
     click.echo(f'Re-start {uid}')
+    run_single_action_client(config.host, config.port, "restart", uid=uid)
 
 
 @cli.command()

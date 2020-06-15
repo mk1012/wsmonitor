@@ -11,8 +11,6 @@ from wsmonitor.process.data import ActionResponse, OutputEvent
 from wsmonitor.util import from_json
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
 
 class AwaitedResponse:
 
@@ -52,7 +50,7 @@ class WSMonitorClient:
 
         self.start_read_task()
         self.is_connected = True
-        logger.info("Client connected")
+        logger.debug("Client connected")
         return True
 
     async def action(self, action_name: str, **kwargs):
@@ -68,14 +66,14 @@ class WSMonitorClient:
         self._awaited_response = AwaitedResponse(action_name)
         await self.websocket.send(data)
 
-        logger.info("Waiting for Action '%s' to be fullfilled", action_name)
+        logger.debug("Waiting for Action '%s' to be fullfilled", action_name)
         response = await self._awaited_response
-        logger.info("Action '%s' is fullfilled", action_name)
+        logger.debug("Action '%s' is fullfilled", action_name)
 
         return response
 
     async def _on_action_response(self, response: ActionResponse):
-        logger.info("Response: %s", response)
+        logger.debug("Response: %s", response)
         # assert response.action == action_name, f"{event.action} != {action_name}"
         if not self._awaited_response.set_if_match(response.action, response.data):
             logger.warning("Received response '%s' while expecting '%s'",
@@ -108,7 +106,7 @@ class WSMonitorClient:
             logger.debug("Client is not connected, cannot close connection!")
             return
 
-        logger.info("Shutting client down...")
+        logger.debug("Shutting client down...")
         if self._read_task is not None:
             self._read_task.cancel()
             try:
@@ -116,7 +114,7 @@ class WSMonitorClient:
             except CancelledError:
                 pass
             except Exception as e:
-                logger.info("Read task raised an exception", exc_info=e)
+                logger.warning("Read task raised an exception", exc_info=e)
 
         if self.is_connected:
             await self.websocket.close()
@@ -134,8 +132,8 @@ def run_single_action_client(host: str, port: int, action_name: str, **kwargs):
 
     async def main():
         while not await client.connect(host, port):
-            logger.info("Waiting 1sec to re-connect")
-            await asyncio.sleep(1)
+            logger.info("Connection to server could be established. Waiting 5s to retry")
+            await asyncio.sleep(5)
 
         result = None
         if action_name == "output":
