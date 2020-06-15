@@ -26,6 +26,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
             "start": CallbackClientAction("start", ["uid"], self.__start_action),
             "restart": CallbackClientAction("start", ["uid"], self.__restart_action),
             "stop": CallbackClientAction("stop", ["uid"], self.__stop_action),
+            "list": CallbackClientAction("list", [], self.__list_action),
         })
 
     async def welcome_client(self, websocket: websockets.WebSocketClientProtocol):
@@ -47,10 +48,14 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
     async def __register_action(self, uid: str, cmd: str, group=True) -> ActionResponse:
         result = self.register_process(uid, cmd, group)
         if isinstance(result, str):
-            return ActionFailure(uid, "registered", result)
+            return ActionFailure(uid, "register", result)
 
         self.trigger_periodic_event.set()
-        return ActionResponse(uid, "registered", True)
+        return ActionResponse(uid, "register", True)
+
+    async def __list_action(self) -> ActionResponse:
+        payload = [proc.to_json() for proc in self.get_processes()]
+        return ActionResponse(None, "list", True, payload)
 
     async def __start_action(self, uid: str) -> ActionResponse:
         result = self.start_process(uid)
@@ -86,8 +91,8 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
 
             logger.info("Triggered periodic update. Via event: %s", self.trigger_periodic_event.is_set())
             self.trigger_periodic_event.clear()
-            data = ProcessSummaryEvent(self.get_processes())
-            await self.broadcast(str(data))
+            event = ProcessSummaryEvent(self.get_processes())
+            await self.broadcast(event.to_json_str())
 
     def _get_monitor_tasks(self):
         tasks = ProcessMonitor._get_monitor_tasks(self)
@@ -96,9 +101,9 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         return tasks
 
     async def on_state_event(self, event: StateChangedEvent):
-        logger.debug("Received state event: %s", str(event))
-        await self.broadcast(str(event))
+        logger.debug("Received state event: %s", event.to_json_str())
+        await self.broadcast(event.to_json_str())
 
     async def on_output_event(self, event: OutputEvent):
-        logger.debug("Received output event: %s", str(event))
-        await self.broadcast(str(event))
+        logger.debug("Received output event: %s", event.to_json_str())
+        await self.broadcast(event.to_json_str())

@@ -90,7 +90,7 @@ class WebsocketActionServer:
             data = await websocket.recv()  # raises on close/error
 
             result = await self.__handle_input_from_client(data)
-            await websocket.send(str(result))
+            await websocket.send(result.to_json_str())
 
     async def broadcast(self, line: str):
         # TODO(mark): this blocks the process processing application!

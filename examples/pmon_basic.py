@@ -1,10 +1,9 @@
 import asyncio
 import logging
-import signal
 import sys
 
 from wsmonitor.process.process_monitor import ProcessMonitor
-from wsmonitor.scripts import util
+from wsmonitor import util
 
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format="%(asctime)s - %(name)s - %(lineno)d -  %(message)s")

@@ -96,6 +96,13 @@ class ActionResponse(JsonFormattable):
         self.uid = uid
         self.data = data
 
+    def __str__(self):
+        verb = "succeeded" if self.success else "failed"
+        if self.data is not None:
+            return f"Action '{self.action}' for process('{self.uid}') {verb}: {self.data}"
+
+        return f"Action '{self.action}' for process('{self.uid}') {verb}"
+
 
 def ActionFailure(uid: Optional[str], action: str, msg: Union[Dict, str]):
     return ActionResponse(uid, action, False, data=msg)

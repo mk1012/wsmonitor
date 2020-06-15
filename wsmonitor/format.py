@@ -4,6 +4,8 @@ import json
 class JsonFormattable:
     __slots__ = ()
 
+
+
     def to_json(self):
         return {"type": self.__class__.__name__, "data": {slot: getattr(self, slot) for slot in self.__slots__}}
 
@@ -17,6 +19,9 @@ class JsonFormattable:
             setattr(self, slot, json_data[slot])
 
     def __str__(self):
+        return self.to_json_str()
+
+    def to_json_str(self):
         return json.dumps(self.to_json())
 
 

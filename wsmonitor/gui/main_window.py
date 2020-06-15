@@ -1,5 +1,6 @@
 import json
 import logging
+import signal
 import sys
 from json import JSONDecodeError
 
@@ -39,10 +40,13 @@ class ProcessMonitorWindow(QMainWindow):
             logger.warning("Already connected")
             return
 
-        self.establish_connection()
-
-    def establish_connection(self):
         server_url = self.ui.txt_conenction.text()
+        self.establish_connection(server_url)
+
+    def establish_connection(self, server_url):
+        if self.ui.txt_conenction.text() != server_url:
+            self.ui.txt_conenction.setText(server_url)
+
         logger.info("Connecting to: %s", server_url)
         self.client.open(QUrl(server_url))
 
@@ -167,10 +171,12 @@ class ProcessMonitorUI:
         self.tabs_output.append_output(output.uid, output.output)
 
 
-def main():
+def main(host: str = "127.0.0.1", port: int = 8765):
     app = QApplication(sys.argv)
+    signal.signal(signal.SIGINT, lambda _, _1: app.quit())
 
     window = ProcessMonitorWindow()
+    window.establish_connection(f"ws://{host}:{port}/")
     window.show()
 
     sys.exit(app.exec_())

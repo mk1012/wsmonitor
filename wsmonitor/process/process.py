@@ -52,7 +52,7 @@ class Process:
 
         logger.debug("Process[%s]: starting", self._data.uid)
         self._asyncio_process = await asyncio.create_subprocess_shell(
-            self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn)
+            self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn,bufsize=0)
 
         self._state_changed(ProcessData.STARTED)
 
