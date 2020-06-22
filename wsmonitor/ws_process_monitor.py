@@ -24,7 +24,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         self.known_actions.update({
             "add": CallbackClientAction("add", ["uid", "cmd", "group"], self.__register_action),
             "start": CallbackClientAction("start", ["uid"], self.__start_action),
-            "restart": CallbackClientAction("start", ["uid"], self.__restart_action),
+            "restart": CallbackClientAction("restart", ["uid"], self.__restart_action),
             "stop": CallbackClientAction("stop", ["uid"], self.__stop_action),
             "list": CallbackClientAction("list", [], self.__list_action),
         })
@@ -35,8 +35,9 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
     async def run(self, host="127.0.0.1", port=8766):
         # TODO(mark): the server seems to cause problems with other task (they are not scheduled?)
         # therefore start in another task
-        asyncio.create_task(self.start_server(host, port))
+        server_task = asyncio.create_task(self.start_server(host, port))
         self.start_monitor()
+        return await server_task
 
     async def shutdown(self):
         logger.info("Shutdown initiated")
@@ -48,10 +49,10 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
     async def __register_action(self, uid: str, cmd: str, group=True) -> ActionResponse:
         result = self.register_process(uid, cmd, group)
         if isinstance(result, str):
-            return ActionFailure(uid, "register", result)
+            return ActionFailure(uid, "add", result)
 
         self.trigger_periodic_event.set()
-        return ActionResponse(uid, "register", True)
+        return ActionResponse(uid, "add", True)
 
     async def __remove_action(self, uid: str) -> ActionResponse:
         result = self.unregister_process(uid)

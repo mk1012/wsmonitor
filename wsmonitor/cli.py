@@ -67,7 +67,7 @@ def add(config: ServerConfig, uid: str, cmd: str, as_group: bool):
     """
     Adds a new process with the given unique id and executes the specified command once started.
     """
-    result = run_single_action_client(config.host, config.port, "register", uid=uid, cmd=cmd, group=as_group)
+    result = run_single_action_client(config.host, config.port, "add", uid=uid, cmd=cmd, group=as_group)
     click.echo(f'Add command {uid}="{cmd}" group={as_group} -> {result}')
 
 
