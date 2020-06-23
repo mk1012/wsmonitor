@@ -64,6 +64,8 @@ class WebsocketActionServer:
     async def start_server(self, host="127.0.0.1", port=8766):
         logger.info("Starting server on %s:%d", host, port)
         self.server = await websockets.serve(self.__on_client_connected, host, port)
+        logger.info("Starting server on %s:%d", host, port)
+
 
     async def __on_client_connected(self, websocket, _):
         # TODO(mark) is every listen()-invocation, run in its own task?

@@ -74,10 +74,10 @@ class ProcessMonitor:
         process = self._processes[uid]
         return process.restart_ended_process()
 
-    def _get_monitor_tasks(self) -> List[asyncio.Task]:
+    def _get_monitor_tasks(self) -> List[asyncio.Future]:
         # TODO: combine output events?
-        state_task = asyncio.create_task(self._process_queue(self._state_event_queue, self.on_state_event))
-        output_task = asyncio.create_task(self._process_queue(self._output_event_queue, self.on_output_event))
+        state_task = asyncio.ensure_future(self._process_queue(self._state_event_queue, self.on_state_event))
+        output_task = asyncio.ensure_future(self._process_queue(self._output_event_queue, self.on_output_event))
         return [state_task, output_task]
 
     def start_monitor(self):

@@ -124,7 +124,7 @@ class Process:
             if handler is not None:
                 handler(self, line)
 
-    def start_as_task(self) -> Union[asyncio.Task, str]:
+    def start_as_task(self) -> Union[asyncio.Future, str]:
         if self._data.is_in_state(ProcessData.ENDED):
             logger.info("Restarting ended task: %s", self.uid())
             # reset process state
@@ -139,7 +139,7 @@ class Process:
 
         # change state to ensure single start, without an event
         self._data.state = ProcessData.STARTING
-        self._process_task = asyncio.create_task(self._run_process())
+        self._process_task = asyncio.ensure_future(self._run_process())
         return self._process_task
 
     def get_start_task(self) -> asyncio.Task:

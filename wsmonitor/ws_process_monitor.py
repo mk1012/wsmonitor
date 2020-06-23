@@ -35,7 +35,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
     async def run(self, host="127.0.0.1", port=8766):
         # TODO(mark): the server seems to cause problems with other task (they are not scheduled?)
         # therefore start in another task
-        asyncio.create_task(self.start_server(host, port))
+        asyncio.ensure_future(self.start_server(host, port))
         self.start_monitor()
 
     async def shutdown(self):
@@ -104,7 +104,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
 
     def _get_monitor_tasks(self):
         tasks = ProcessMonitor._get_monitor_tasks(self)
-        periodic_state_update_task = asyncio.create_task(self._periodic_update_func())
+        periodic_state_update_task = asyncio.ensure_future(self._periodic_update_func())
         tasks.append(periodic_state_update_task)
         return tasks
 

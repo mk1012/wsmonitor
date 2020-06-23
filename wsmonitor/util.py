@@ -6,7 +6,8 @@ from json import JSONDecodeError
 from typing import Coroutine, List, Type, Callable, Optional
 
 from wsmonitor.format import JsonFormattable
-from wsmonitor.process.data import ProcessSummaryEvent, StateChangedEvent, OutputEvent, ActionResponse
+from wsmonitor.process.data import ProcessSummaryEvent, StateChangedEvent, \
+    OutputEvent, ActionResponse
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +18,15 @@ def run(run: Coroutine, shutdown: Optional[Callable[[], Coroutine]] = None):
 
     loop = asyncio.get_event_loop()
     # loop.set_debug(True)
-    main_task = loop.create_task(run)
+    main_task = asyncio.ensure_future(run)
 
     async def initiate_shutdown():
         logger.info("Shutdown signal received, shutting down...")
         if shutdown is not None:
-            await shutdown()
+            try:
+                await shutdown()
+            except Exception as excpt:
+                logger.error("Shutdown raised: %s", excpt)
 
         logger.debug("Cancelling main task")
         main_task.cancel()
@@ -42,6 +46,7 @@ def run(run: Coroutine, shutdown: Optional[Callable[[], Coroutine]] = None):
     loop.add_signal_handler(signal.SIGTERM, signal_handler)
 
     try:
+        logger.info("Starting loop")
         loop.run_forever()
     finally:
         # TODO: check for unfinished tasks
@@ -51,7 +56,9 @@ def run(run: Coroutine, shutdown: Optional[Callable[[], Coroutine]] = None):
     return main_task.result()
 
 
-MESSAGE_TYPES: List[Type[JsonFormattable]] = [ProcessSummaryEvent, StateChangedEvent, OutputEvent, ActionResponse]
+MESSAGE_TYPES: List[Type[JsonFormattable]] = [ProcessSummaryEvent,
+                                              StateChangedEvent, OutputEvent,
+                                              ActionResponse]
 
 
 def from_json(json_str: str):
