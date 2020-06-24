@@ -218,3 +218,11 @@ class Process:
             await asyncio.sleep(.01)
 
         return self.exit_code()
+
+    def update_data(self, command: str, as_process_group: bool) -> None:
+        if not self._data.is_in_state(ProcessData.INITIALIZED, ProcessData.ENDED):
+            logger.warning("Cannot change process data while it is active")
+            return
+
+        self._data.command = command
+        self._data.as_process_group = as_process_group

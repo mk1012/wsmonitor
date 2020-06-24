@@ -41,12 +41,16 @@ class ProcessListWidget(QScrollArea):
         self.process_widget_map[event.uid].update_state(event.state, event.exit_code)
 
     def update_process_data(self, updated_process_data: Set[ProcessData]):
-        known_processes = updated_process_data & self.process_data
+        potentially_updated = set()
+        for process_data in updated_process_data:
+            if process_data in self.process_data:
+                potentially_updated.add(process_data)
+
         new_processes = updated_process_data - self.process_data
         unknown_processes = self.process_data - updated_process_data
-
+        print(potentially_updated, new_processes, unknown_processes)
         # TODO(mark): update process data sets with new data
-        for known_process in known_processes:
+        for known_process in potentially_updated:
             widget = self.process_widget_map[known_process.uid]
             widget.on_update_process_data(known_process)
 
@@ -65,7 +69,7 @@ class ProcessListWidget(QScrollArea):
             del self.process_widget_map[process.uid]
             widget.deleteLater()
 
-        self.process_data = new_processes | known_processes
+        self.process_data = new_processes | potentially_updated
         self.lbl_default.setVisible(len(self.process_data) == 0)
 
         return new_processes, unknown_processes

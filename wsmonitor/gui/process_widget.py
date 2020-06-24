@@ -135,6 +135,7 @@ class ProcessWidget(BlinkBackgroundWidget):
     def on_update_process_data(self, process_data: ProcessData):
         logger.debug("Process data updated: %s", process_data)
         self.update_state(process_data.state, process_data.exit_code)
+        self.txt_command.setText(process_data.command)
 
     def update_state(self, state: str, exit_code: int, state_changed=False):
         self._process_data.exit_code = exit_code

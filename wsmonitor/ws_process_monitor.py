@@ -22,7 +22,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         self._is_running = False
 
         self.known_actions.update({
-            "add": CallbackClientAction("add", ["uid", "cmd", "group"], self.__register_action),
+            "add": CallbackClientAction("add", ["uid", "cmd", "group"], self.__add_action),
             "remove": CallbackClientAction("remove", ["uid"], self.__remove_action),
             "start": CallbackClientAction("start", ["uid"], self.__start_action),
             "restart": CallbackClientAction("restart", ["uid"], self.__restart_action),
@@ -48,13 +48,13 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         await ProcessMonitor.shutdown(self)
         await self.stop_server()
 
-    async def __register_action(self, uid: str, cmd: str, group=True) -> ActionResponse:
+    async def __add_action(self, uid: str, cmd: str, group=True) -> ActionResponse:
         result = self.add_process(uid, cmd, group)
         if isinstance(result, str):
             return ActionFailure(uid, "add", result)
 
         self.trigger_periodic_event.set()
-        return ActionResponse(uid, "add", True)
+        return ActionResponse(uid, "add", True, True)
 
     async def __remove_action(self, uid: str) -> ActionResponse:
         result = self.remove_process(uid)

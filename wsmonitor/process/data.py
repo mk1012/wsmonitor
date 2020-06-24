@@ -28,8 +28,8 @@ class ProcessData(JsonFormattable):
             return False
         return self.uid == other.uid
 
-    def is_in_state(self, state):
-        return self.state == state
+    def is_in_state(self, *state):
+        return self.state in state
 
     def reset(self):
         self.state = ProcessData.INITIALIZED

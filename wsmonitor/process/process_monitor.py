@@ -21,18 +21,24 @@ class ProcessMonitor:
 
     def add_process(self, uid: str, command: str, as_process_group: bool = True) -> Union[str, Process]:
         if uid in self._processes:
-            msg = f"Process with name '{uid}' already known"
-            logger.error(msg)
-            return msg
+            process = self._processes[uid]
+            if process.is_running():
+                msg = f"Process with name '{uid}' already known and running"
+                logger.error(msg)
+                return msg
+            else:
+                process.update_data(command, as_process_group)
+                logger.info("Updated process %s: %s", uid, process.get_data())
+                return process
 
         process = Process(ProcessData(uid, command, as_process_group))
         self._processes[uid] = process
-        logger.info("Registered new process %s", uid)
+        logger.info("Added new process %s", uid)
         return process
 
     def remove_process(self, uid: str) -> Union[str, bool]:
         if uid not in self._processes:
-            return f"Process with name '{uid}' is not known."
+            return f"Unknown process: '{uid}'"
 
         process = self._processes[uid]
         if process.is_running():
