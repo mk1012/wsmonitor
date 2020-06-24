@@ -11,11 +11,11 @@ if __name__ == '__main__':
 
 
     async def populate():
-        reg.register_process("py", "python3 signal_inhibit.py")
-        reg.register_process("ping", "ping -c 10 google.de")
+        reg.add_process("py", "python3 signal_inhibit.py")
+        reg.add_process("ping", "ping -c 10 google.de")
 
-        reg.start_process("py")
-        reg.start_process("ping")
+        await reg.start_process("py")
+        await reg.start_process("ping")
 
         reg.start_monitor()
 
@@ -25,4 +25,4 @@ if __name__ == '__main__':
         loop.stop()
 
 
-    util.run(populate(), shutdown())
+    util.run(populate(), shutdown)

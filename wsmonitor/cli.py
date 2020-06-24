@@ -30,7 +30,7 @@ def run_server(host, port, config_file=None):
         import json
         processes = json.loads(data)
         for process in processes:
-            wpm.register_process(process["uid"], process["cmd"], process["process_group"])
+            wpm.add_process(process["uid"], process["cmd"], process["process_group"])
 
     run(wpm.run(host, port), wpm.shutdown)
 

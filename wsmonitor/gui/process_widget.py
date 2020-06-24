@@ -172,7 +172,14 @@ class ProcessOutputTabsWidget(QTabWidget):
         logger.info("Added output tab for %s", uid)
         output = ProcessOutputTabWidget(self)
         self.tabs[uid] = output
-        self.addTab(output, uid)
+        output.tab_id = self.addTab(output, uid)
+
+    def remove_process_tab(self, uid: str):
+        logger.info("Remove output tab for %s", uid)
+        output = self.tabs[uid]
+        self.removeTab(output.tab_id)
+        del self.tabs[uid]
+        output.deleteLater()
 
     def append_output(self, uid: str, output: str):
         tab = self.tabs[uid]
@@ -193,6 +200,7 @@ class ProcessOutputTabWidget(QWidget):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
+        self.tab_id = -1
         self.layout = QVBoxLayout(self)
         self.txt_output = QTextEdit(self)
 

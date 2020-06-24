@@ -23,6 +23,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
 
         self.known_actions.update({
             "add": CallbackClientAction("add", ["uid", "cmd", "group"], self.__register_action),
+            "remove": CallbackClientAction("remove", ["uid"], self.__remove_action),
             "start": CallbackClientAction("start", ["uid"], self.__start_action),
             "restart": CallbackClientAction("restart", ["uid"], self.__restart_action),
             "stop": CallbackClientAction("stop", ["uid"], self.__stop_action),
@@ -48,7 +49,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         await self.stop_server()
 
     async def __register_action(self, uid: str, cmd: str, group=True) -> ActionResponse:
-        result = self.register_process(uid, cmd, group)
+        result = self.add_process(uid, cmd, group)
         if isinstance(result, str):
             return ActionFailure(uid, "add", result)
 
@@ -56,12 +57,12 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         return ActionResponse(uid, "add", True)
 
     async def __remove_action(self, uid: str) -> ActionResponse:
-        result = self.unregister_process(uid)
+        result = self.remove_process(uid)
         if isinstance(result, str):
             return ActionFailure(uid, "remove", result)
 
         self.trigger_periodic_event.set()
-        return ActionResponse(uid, "register", True)
+        return ActionResponse(uid, "remove", True)
 
     async def __list_action(self) -> ActionResponse:
         payload = [proc.to_json() for proc in self.get_processes()]

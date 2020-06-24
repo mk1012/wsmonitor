@@ -59,9 +59,12 @@ class ProcessMonitorWindow(QMainWindow):
 
             if msg_type == "ProcessSummaryEvent":
                 pdatas = ProcessSummaryEvent.from_json(payload)
-                new_processes = self.ui.process_list.update_process_data(set(pdatas.processes))
+                new_processes, removed_processes = self.ui.process_list.update_process_data(set(pdatas.processes))
                 for process in new_processes:
                     self.ui.tabs_output.add_process_tab(process.uid)
+                for process in removed_processes:
+                    self.ui.tabs_output.remove_process_tab(process.uid)
+
             if msg_type == "StateChangedEvent":
                 state: StateChangedEvent = StateChangedEvent.from_json(payload)
                 self.ui.process_list.update_single_process_state(state)
