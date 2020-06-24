@@ -4,12 +4,10 @@ import logging
 
 from examples.ws_client import run_single_action_client
 from wsmonitor.gui import main_window
-from wsmonitor.scripts import wsmon
+from wsmonitor.util import run
+from wsmonitor.ws_process_monitor import WebsocketProcessMonitor
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
-
-
-# logging.getLogger().addHandler(logging.StreamHandler())
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%H:%M:%S')
 
 
 class ServerConfig:
@@ -20,6 +18,21 @@ class ServerConfig:
 
 
 pass_config = click.make_pass_decorator(ServerConfig, ensure=True)
+
+
+def run_server(host, port, config_file=None):
+    wpm = WebsocketProcessMonitor()
+
+    if config_file is not None:
+        data = config_file.read()
+        config_file.close()
+
+        import json
+        processes = json.loads(data)
+        for process in processes:
+            wpm.register_process(process["uid"], process["cmd"], process["process_group"])
+
+    run(wpm.run(host, port), wpm.shutdown)
 
 
 @click.group()
@@ -55,7 +68,7 @@ def server(config: ServerConfig, initial: click.File):
     Starts the ProcessMonitor server.
     """
     click.echo('Starting ws server: %s' % config)
-    wsmon.main(config.host, config.port)
+    run_server(config.host, config.port)
 
 
 @cli.command()
@@ -79,7 +92,7 @@ def remove(config: ServerConfig, uid: str):
     Removes the process with the given unique id.
     """
     result = run_single_action_client(config.host, config.port, "remove", uid=uid)
-    click.echo(f'Remove command {uid}="{cmd}" group={as_group} -> {result}')
+    click.echo(f'Remove command {uid} -> {result}')
 
 
 @cli.command()
@@ -89,8 +102,8 @@ def start(config: ServerConfig, uid: str):
     """
     Starts the process with the given unique id.
     """
-    click.echo(f'Start {uid}')
-    run_single_action_client(config.host, config.port, "start", uid=uid)
+    result = run_single_action_client(config.host, config.port, "start", uid=uid)
+    click.echo(f'Start "{uid}" -> {result}')
 
 
 @cli.command()
@@ -122,7 +135,6 @@ def output(config: ServerConfig, uid: str):
     """
     Logs the output reported from the ProcessMonitor.
     """
-    click.echo(f'Output')
     run_single_action_client(config.host, config.port, "output")
 
 
@@ -133,11 +145,12 @@ def list_processes(config: ServerConfig, as_json):
     """
     Lists all processes.
     """
-    click.echo(f'Listing processes')
     data = run_single_action_client(config.host, config.port, "list")
     if data is not None:
         result = json.dumps(data, indent=True)
         click.echo(result)
+    else:
+        click.echo("No processes could be retrieved")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import signal
+from asyncio.runners import _cancel_all_tasks
 from json import JSONDecodeError
 from typing import Coroutine, List, Type, Callable, Optional
 
@@ -46,14 +47,19 @@ def run(run: Coroutine, shutdown: Optional[Callable[[], Coroutine]] = None):
     loop.add_signal_handler(signal.SIGTERM, signal_handler)
 
     try:
-        logger.info("Starting loop")
+        logger.debug("Starting loop")
         loop.run_forever()
     finally:
         # TODO: check for unfinished tasks
+        loop.run_until_complete(loop.shutdown_asyncgens())
         loop.stop()
         loop.close()
 
+    if main_task.cancelled():
+        return None
+
     return main_task.result()
+
 
 
 MESSAGE_TYPES: List[Type[JsonFormattable]] = [ProcessSummaryEvent,

@@ -12,6 +12,7 @@ from wsmonitor.util import from_json
 
 logger = logging.getLogger(__name__)
 
+
 class AwaitedResponse:
 
     def __init__(self, action):
