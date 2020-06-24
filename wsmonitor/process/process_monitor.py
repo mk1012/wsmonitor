@@ -42,7 +42,7 @@ class ProcessMonitor:
         logger.info("Removed process %s", uid)
         return True
 
-    def start_process(self, uid: str) -> Union[str, Process]:
+    def start_process(self, uid: str) -> Union[str, asyncio.Future]:
 
         if uid not in self._processes:
             return "No process with name '%s'" % uid

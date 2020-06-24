@@ -83,7 +83,7 @@ class WSMonitorClient:
         if self._read_task is not None:
             return
 
-        self._read_task = asyncio.create_task(self._read_loop())
+        self._read_task = asyncio.ensure_future(self._read_loop())
 
     async def _read_loop(self):
         logger.debug("Read task started")

@@ -57,15 +57,23 @@ class WebsocketActionServer:
 
     async def stop_server(self):
         logger.info("Server shutdown triggered")
+        if self.server is None:
+            logger.info("Server is None (not running)")
+            return
         self.server.close()
         await self.server.wait_closed()
         logger.info("Server closed")
 
     async def start_server(self, host="127.0.0.1", port=8766):
         logger.info("Starting server on %s:%d", host, port)
-        self.server = await websockets.serve(self.__on_client_connected, host, port)
-        logger.info("Starting server on %s:%d", host, port)
+        try:
+            self.server = await websockets.serve(self.__on_client_connected, host, port)
+        except Exception as excpt:
+            logger.error("Failed to start webserver: %s", excpt)
+            return False
 
+        logger.info("Webserver started")
+        return True
 
     async def __on_client_connected(self, websocket, _):
         # TODO(mark) is every listen()-invocation, run in its own task?

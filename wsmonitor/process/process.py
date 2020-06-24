@@ -51,8 +51,13 @@ class Process:
             preexec_fn = os.setsid
 
         logger.debug("Process[%s]: starting", self._data.uid)
-        self._asyncio_process = await asyncio.create_subprocess_shell(
-            self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn, bufsize=0)
+        try:
+            self._asyncio_process = await asyncio.create_subprocess_exec(
+                self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn, bufsize=0)
+        except Exception as excpt:
+            logger.warning("Process[%s]: failed to start subprocess: %s", self.uid(), excpt)
+            self._state_changed(ProcessData.ENDED)
+            return -1
 
         self._state_changed(ProcessData.STARTED)
 
@@ -102,7 +107,7 @@ class Process:
             logger.warning("Exception stopping process", exc_info=excpt)
             return "Exception while stopping process %s" % excpt.__class__.__name__
 
-    def restart_ended_process(self):
+    def restart_ended_process(self) -> Union[str, asyncio.Future]:
         if self._data.state != ProcessData.ENDED:
             msg = f"Process {self.uid()} cannot be re-started in state: {self._data.state}"
             logger.warning(msg)
