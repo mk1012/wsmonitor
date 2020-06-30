@@ -26,7 +26,7 @@ class ProcessOutput:
 
 
 StateChangeCallback = Callable[['Process'], None]
-OutputCallback = Callable[['Process', str], None]
+OutputCallback = Callable[['Process', bytes], None]
 
 
 class Process:
@@ -55,7 +55,10 @@ class Process:
             self._asyncio_process = await asyncio.create_subprocess_exec(
                 self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn, bufsize=0)
         except Exception as excpt:
-            logger.warning("Process[%s]: failed to start subprocess: %s", self.uid(), excpt)
+            logger.warning(f"Failed to start process[{self.uid()}: {excpt}")
+            if self._output_listener is not None:
+                self._output_listener(self, f"{excpt}\n".encode('ascii'))
+
             self._state_changed(ProcessData.ENDED)
             return -1
 

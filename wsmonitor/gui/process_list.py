@@ -31,7 +31,6 @@ class ProcessListWidget(QScrollArea):
         self.setWidgetResizable(True)
         self.setWidget(self.main_widget)
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
-        self.setMinimumWidth(380)
 
     def on_action_completed(self, response: ActionResponse):
         logger.info("Action completed: %s", response)

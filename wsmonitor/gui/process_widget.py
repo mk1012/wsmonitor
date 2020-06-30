@@ -79,8 +79,8 @@ class ProcessWidget(BlinkBackgroundWidget):
 
         self.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Minimum)
         self.layout = QGridLayout()
-        self.layout.setColumnMinimumWidth(0, 120)
-        self.layout.setColumnStretch(0, 10)
+        self.layout.setColumnMinimumWidth(0, 50)
+        # self.layout.setColumnStretch(0, 1)
         self.layout.setContentsMargins(4, 4, 4, 4)
         self.layout.setVerticalSpacing(2)
 
@@ -90,17 +90,18 @@ class ProcessWidget(BlinkBackgroundWidget):
         self.btn_start_stop.setMinimumWidth(60)
         self.btn_restart.setMinimumWidth(60)
         self.txt_command = QLabel(self, text=process_data.command)
+        self.txt_command.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Minimum)
         # self.txt_command.setPlaceholderText("Your command")
 
         self.lbl_uid = QLabel(self, text=process_data.uid)
         self.lbl_uid.setStyleSheet("font-weight: bold")
         self.lbl_state = QLabel(self, text=process_data.state_info())
 
-        self.layout.addWidget(self.lbl_uid, 0, 0)
-        self.layout.addWidget(self.lbl_state, 0, 1, 1, 2)
-        self.layout.addWidget(self.txt_command, 1, 0)
-        self.layout.addWidget(self.btn_start_stop, 1, 1)
-        self.layout.addWidget(self.btn_restart, 1, 2)
+        self.layout.addWidget(self.lbl_uid, 0, 0, 1, 2)
+        self.layout.addWidget(self.lbl_state, 0, 2, 1, 1)
+        self.layout.addWidget(self.txt_command, 1, 2)
+        self.layout.addWidget(self.btn_start_stop, 1, 0)
+        self.layout.addWidget(self.btn_restart, 1, 1)
         self.setLayout(self.layout)
 
         self.btn_start_stop.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
@@ -217,6 +218,7 @@ class ProcessOutputTabWidget(QWidget):
 
         sub_layout = QHBoxLayout(self)
         self.chb_clear_on_start = QCheckBox(self, text="Clear on start")
+        self.chb_clear_on_start.setChecked(True)
         self.btn_clear = QPushButton(self, text="Clear output")
         sub_layout.addWidget(self.chb_clear_on_start)
         sub_layout.addStretch()
