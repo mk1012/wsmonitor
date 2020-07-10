@@ -1,18 +1,26 @@
-import click
+import asyncio
 import json
 import logging
 
-from examples.ws_client import run_single_action_client
-from wsmonitor.gui import main_window
+import click
+
+from wsmonitor.process.process import Process
+from wsmonitor.ws_client import run_single_action_client
+
+try:
+    from wsmonitor.gui import main_window
+except ImportError:
+    print("PySide2 is not installed")
 from wsmonitor.util import run
 from wsmonitor.ws_process_monitor import WebsocketProcessMonitor
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%H:%M:%S')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s',
+                    datefmt='%H:%M:%S')
 
 
 class ServerConfig:
 
-    def __init__(self, host: str = "127.0.0.1", port: int = 8765):
+    def __init__(self, host: str = "127.0.0.1", port: int = 8766):
         self.host: str = host
         self.port: int = port
 
@@ -20,24 +28,34 @@ class ServerConfig:
 pass_config = click.make_pass_decorator(ServerConfig, ensure=True)
 
 
-def run_server(host, port, config_file=None):
+def run_server(host, port, config_filepath=None):
     wpm = WebsocketProcessMonitor()
 
-    if config_file is not None:
-        data = config_file.read()
-        config_file.close()
+    if config_filepath is not None:
+        with open(config_filepath, "r") as config_file:
+            data = config_file.read()
+            config_file.close()
 
-        import json
-        processes = json.loads(data)
-        for process in processes:
-            wpm.add_process(process["uid"], process["cmd"], process["process_group"])
+            import json
+            processes = json.loads(data)
+            for process_config in processes:
+                process = wpm.add_process(process_config["uid"],
+                                          process_config["cmd"],
+                                          process_config["group"])
+
+                autostart = process_config.get("auto_start", None)
+                if isinstance(process, Process) and bool(autostart):
+                    delay = autostart if isinstance(autostart, int) else 0
+                    asyncio.get_event_loop().call_later(
+                        delay, process.start_as_task)
 
     run(wpm.run(host, port), wpm.shutdown)
 
 
 @click.group()
-@click.option("--host", default="127.0.0.1", help="The host the server is running on")
-@click.option("--port", default=8765, help="The port the server is running on")
+@click.option("--host", default="127.0.0.1",
+              help="The host the server is running on")
+@click.option("--port", default=8766, help="The port the server is running on")
 @click.option("-v", is_flag="True", help="Enable verbose output.")
 @click.option("-vv", is_flag="True", help="Enable verbose verbose output.")
 @pass_config
@@ -61,26 +79,29 @@ def gui(config: ServerConfig):
 
 
 @cli.command()
-@click.option("--initial", default=None, type=click.File("r"), help="JSON file with the initial processes to load")
+@click.option("--initial", default=None,
+              help="JSON file with the initial processes to load")
 @pass_config
-def server(config: ServerConfig, initial: click.File):
+def server(config: ServerConfig, initial: str):
     """
     Starts the ProcessMonitor server.
     """
     click.echo('Starting ws server: %s' % config)
-    run_server(config.host, config.port)
+    run_server(config.host, config.port, initial)
 
 
 @cli.command()
 @click.argument("uid")
 @click.argument("cmd")
-@click.option("--as-group", is_flag=True, help="Execute the process in its own process group.")
+@click.option("--as-group", is_flag=True,
+              help="Execute the process in its own process group.")
 @pass_config
 def add(config: ServerConfig, uid: str, cmd: str, as_group: bool):
     """
     Adds a new process with the given unique id and executes the specified command once started.
     """
-    result = run_single_action_client(config.host, config.port, "add", uid=uid, cmd=cmd, group=as_group)
+    result = run_single_action_client(config.host, config.port, "add", uid=uid,
+                                      cmd=cmd, group=as_group)
     click.echo(f'Add command {uid}="{cmd}" group={as_group} -> {result}')
 
 
@@ -91,7 +112,8 @@ def remove(config: ServerConfig, uid: str):
     """
     Removes the process with the given unique id.
     """
-    result = run_single_action_client(config.host, config.port, "remove", uid=uid)
+    result = run_single_action_client(config.host, config.port, "remove",
+                                      uid=uid)
     click.echo(f'Remove command {uid} -> {result}')
 
 
@@ -102,8 +124,23 @@ def start(config: ServerConfig, uid: str):
     """
     Starts the process with the given unique id.
     """
-    result = run_single_action_client(config.host, config.port, "start", uid=uid)
+    result = run_single_action_client(config.host, config.port, "start",
+                                      uid=uid)
     click.echo(f'Start "{uid}" -> {result}')
+
+
+@cli.command()
+@click.argument("action")
+@click.argument("project")
+@click.argument("uid")
+@pass_config
+def action(config: ServerConfig, action: str, project: str, uid: str):
+    """
+    Sends the given action command.
+    """
+    result = run_single_action_client(config.host, config.port, action,
+                                      uid=uid, project=project)
+    click.echo(f'Action "{action}" -> {result}')
 
 
 @cli.command()
@@ -139,7 +176,8 @@ def output(config: ServerConfig, uid: str):
 
 
 @cli.command(name="list")
-@click.option("--json", "as_json", is_flag=True, help="Output the process list as simple text not json.")
+@click.option("--json", "as_json", is_flag=True,
+              help="Output the process list as simple text not json.")
 @pass_config
 def list_processes(config: ServerConfig, as_json):
     """

@@ -52,7 +52,7 @@ class Process:
 
         logger.debug("Process[%s]: starting", self._data.uid)
         try:
-            self._asyncio_process = await asyncio.create_subprocess_exec(
+            self._asyncio_process = await asyncio.create_subprocess_shell(
                 self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn, bufsize=0)
         except Exception as excpt:
             logger.warning(f"Failed to start process[{self.uid()}: {excpt}")

@@ -43,7 +43,6 @@ class WebsocketActionServer:
 
     def __init__(self):
         super().__init__()
-        self.periodic_update_timeout = 10
         self.known_actions = {}  # type: Dict[str, ClientAction]
         self.server: Optional[websockets.server.WebSocketServer] = None
         self.clients = set()
