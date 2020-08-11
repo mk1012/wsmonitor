@@ -32,7 +32,8 @@ OutputCallback = Callable[['Process', bytes], None]
 class Process:
     def __init__(self, process_data: ProcessData) -> None:
         self._data = process_data
-        self._asyncio_process: Optional[asyncio.subprocess.Process] = None  # pylint: disable=no-member
+        self._asyncio_process: Optional[
+            asyncio.subprocess.Process] = None  # pylint: disable=no-member
         self._process_task: Optional[asyncio.Task] = None
         self._state_change_listener: Optional[StateChangeCallback] = None
         self._output_listener: Optional[OutputCallback] = None
@@ -53,7 +54,8 @@ class Process:
         logger.debug("Process[%s]: starting", self._data.uid)
         try:
             self._asyncio_process = await asyncio.create_subprocess_shell(
-                self._data.command, stdout=PIPE, stderr=PIPE, preexec_fn=preexec_fn, bufsize=0)
+                self._data.command, stdout=PIPE, stderr=PIPE,
+                preexec_fn=preexec_fn, bufsize=0)
         except Exception as excpt:
             logger.warning(f"Failed to start process[{self.uid()}: {excpt}")
             if self._output_listener is not None:
@@ -62,32 +64,40 @@ class Process:
             self._state_changed(ProcessData.ENDED)
             return -1
 
+        # TODO(mark): we need to process the output to not deadlock
+        # Schedule the read tasks and after that signal the state change
+        self._stream_future = asyncio.gather(
+            self._read_stream(self._asyncio_process.stdout,
+                              self._output_listener),
+            self._read_stream(self._asyncio_process.stderr,
+                              self._output_listener)
+        )
         self._state_changed(ProcessData.STARTED)
 
-        # start the read tasks and wait for them to complete
         try:
-            await asyncio.wait([
-                self._read_stream(self._asyncio_process.stdout, self._output_listener),
-                self._read_stream(self._asyncio_process.stderr, self._output_listener)
-            ])
+            # start the read tasks and wait for them to complete
+            await self._stream_future
             self._data.exit_code = await self._asyncio_process.wait()
-
         except CancelledError:
-            logger.warning("Process[%s]: Caught task CancelledError! Stopping process instead", self.uid())
+            logger.warning("Process[%s]: Reading cancelled! Stopping process",
+                           self.uid())
             await self.stop()
-            self._data.ensure_exit_code(-1)
 
-        logger.debug("Process[%s]: has exited with: %d", self.uid(), self._data.exit_code)
+        self._data.ensure_exit_code(-1)
+        logger.debug("Process[%s]: has exited with: %d", self.uid(),
+                     self._data.exit_code)
         self._state_changed(ProcessData.ENDED)
 
         return self._data.exit_code
 
-    async def stop(self, int_timeout: float = 2, term_timeout: float = 2) -> Union[int, str]:
+    async def stop(self, int_timeout: float = 2, term_timeout: float = 2) -> \
+            Union[int, str]:
 
         if not self.is_running():
             return f"'{self.uid()}' is not running, cannot stop it"
 
-        logger.debug("Process[%s](%d): stopping...", self.uid(), self._asyncio_process.pid)
+        logger.debug("Process[%s](%d): stopping...", self.uid(),
+                     self._asyncio_process.pid)
         self._state_changed(ProcessData.STOPPING)
 
         try:
@@ -99,7 +109,8 @@ class Process:
                 pid = os.getpgid(pid)
                 kill_fn = os.killpg
 
-            return await self._ensure_killed_may_raise(kill_fn, pid, int_timeout, term_timeout)
+            return await self._ensure_killed_may_raise(
+                kill_fn, pid, int_timeout, term_timeout)
 
         except ProcessLookupError:
             msg = f"Failed to find process with pid: '{self.uid()}' it is no longer running."
@@ -123,7 +134,8 @@ class Process:
 
         return self.start_as_task()
 
-    async def _read_stream(self, stream: asyncio.StreamReader, handler: Callable) -> None:
+    async def _read_stream(self, stream: asyncio.StreamReader,
+                           handler: Callable) -> None:
         while True:
             line = await stream.readline()
             if not line:
@@ -185,7 +197,9 @@ class Process:
     def get_data(self) -> ProcessData:
         return self._data
 
-    async def _ensure_killed_may_raise(self, kill_fn, pid, int_timeout: float = 2, term_timeout: float = 2):
+    async def _ensure_killed_may_raise(self, kill_fn, pid,
+                                       int_timeout: float = 2,
+                                       term_timeout: float = 2):
         # politely ask to interrupt the process
         kill_fn(pid, signal.SIGINT)
         # wait shortly to see if already stopped
@@ -204,7 +218,8 @@ class Process:
             if self.has_exit_code():
                 return self.exit_code()
 
-        logger.debug("Process[%s]: Stopping, escalating to SIGTERM", self.uid())
+        logger.debug("Process[%s]: Stopping, escalating to SIGTERM",
+                     self.uid())
         kill_fn(pid, signal.SIGTERM)
         while term_timeout > 0:
             await asyncio.sleep(min(sleep_interval, term_timeout))
@@ -213,17 +228,26 @@ class Process:
             if self.has_exit_code():
                 return self.exit_code()
 
-        logger.debug("Process[%s]: Stopping, escalating to SIGKILL", self.uid())
+        logger.debug("Process[%s]: Stopping, escalating to SIGKILL",
+                     self.uid())
         kill_fn(pid, signal.SIGKILL)
 
-        # SIGKILL cannot be avoided the exit code will be set
+        # SIGKILL cannot be avoided the exit code should be set
+        # TODO(mark): this does seem to hang sometimes, maybe a stdout deadlock
+        # problem? call wait() here? would this be better?
+        self._asyncio_process.kill()
+        if self._stream_future is not None:
+            self._stream_future.cancel()
+
+        logger.debug("Process[%s]: Waiting for exit code", self.uid())
         while not self.has_exit_code():
-            await asyncio.sleep(.01)
+            await asyncio.sleep(.1)
 
         return self.exit_code()
 
     def update_data(self, command: str, as_process_group: bool) -> None:
-        if not self._data.is_in_state(ProcessData.INITIALIZED, ProcessData.ENDED):
+        if not self._data.is_in_state(ProcessData.INITIALIZED,
+                                      ProcessData.ENDED):
             logger.warning("Cannot change process data while it is active")
             return
 

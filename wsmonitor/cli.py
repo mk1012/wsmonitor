@@ -1,4 +1,5 @@
 import asyncio
+from functools import partial
 import json
 import logging
 
@@ -28,8 +29,8 @@ class ServerConfig:
 pass_config = click.make_pass_decorator(ServerConfig, ensure=True)
 
 
-def run_server(host, port, config_filepath=None):
-    wpm = WebsocketProcessMonitor()
+def run_server(host, port, output_timeout, config_filepath=None):
+    wpm = WebsocketProcessMonitor(output_timeout)
 
     if config_filepath is not None:
         with open(config_filepath, "r") as config_file:
@@ -47,7 +48,7 @@ def run_server(host, port, config_filepath=None):
                 if isinstance(process, Process) and bool(autostart):
                     delay = autostart if isinstance(autostart, int) else 0
                     asyncio.get_event_loop().call_later(
-                        delay, process.start_as_task)
+                        delay, partial(wpm.start_process, process.uid()))
 
     run(wpm.run(host, port), wpm.shutdown)
 
@@ -79,15 +80,17 @@ def gui(config: ServerConfig):
 
 
 @cli.command()
+@click.option("--output-timeout", default=0.5,
+              help="Send OutputEvents with the configured interval")
 @click.option("--initial", default=None,
               help="JSON file with the initial processes to load")
 @pass_config
-def server(config: ServerConfig, initial: str):
+def server(config: ServerConfig, output_timeout: float, initial: str):
     """
     Starts the ProcessMonitor server.
     """
     click.echo('Starting ws server: %s' % config)
-    run_server(config.host, config.port, initial)
+    run_server(config.host, config.port, output_timeout, initial)
 
 
 @cli.command()

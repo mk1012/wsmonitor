@@ -72,9 +72,9 @@ class ProcessMonitor:
         process = self._processes[uid]
         return await process.stop()
 
-    async def restart_process(self, uid: str):
+    async def restart_process(self, uid: str, ignore_stop_failure=False):
         result = await self.stop_process(uid)
-        if isinstance(result, str):
+        if isinstance(result, str) and not ignore_stop_failure:
             return f"Failed to stop process, cannot restart: {result}"
 
         process = self._processes[uid]
