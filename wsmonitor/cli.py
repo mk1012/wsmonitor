@@ -4,6 +4,7 @@ import json
 import logging
 
 import click
+from click import get_current_context
 
 from wsmonitor.process.process import Process
 from wsmonitor.ws_client import run_single_action_client
@@ -40,9 +41,11 @@ def run_server(host, port, output_timeout, config_filepath=None):
             import json
             processes = json.loads(data)
             for process_config in processes:
-                process = wpm.add_process(process_config["uid"],
-                                          process_config["cmd"],
-                                          process_config["group"])
+                process = wpm.add_process(
+                    process_config["uid"],
+                    process_config["cmd"],
+                    as_process_group=process_config["group"],
+                    command_kwargs=process_config.get("command_kwargs", None))
 
                 autostart = process_config.get("auto_start", None)
                 if isinstance(process, Process) and bool(autostart):
@@ -93,7 +96,10 @@ def server(config: ServerConfig, output_timeout: float, initial: str):
     run_server(config.host, config.port, output_timeout, initial)
 
 
-@cli.command()
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True,
+))
 @click.argument("uid")
 @click.argument("cmd")
 @click.option("--as-group", is_flag=True,
@@ -103,8 +109,10 @@ def add(config: ServerConfig, uid: str, cmd: str, as_group: bool):
     """
     Adds a new process with the given unique id and executes the specified command once started.
     """
+    kwargs = get_context_kwargs()
     result = run_single_action_client(config.host, config.port, "add", uid=uid,
-                                      cmd=cmd, group=as_group)
+                                      cmd=cmd, group=as_group,
+                                      command_kwargs=kwargs)
     click.echo(f'Add command {uid}="{cmd}" group={as_group} -> {result}')
 
 
@@ -120,16 +128,29 @@ def remove(config: ServerConfig, uid: str):
     click.echo(f'Remove command {uid} -> {result}')
 
 
-@cli.command()
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+    allow_extra_args=True,
+))
 @click.argument("uid")
 @pass_config
 def start(config: ServerConfig, uid: str):
     """
     Starts the process with the given unique id.
     """
+    kwargs = get_context_kwargs()
+
     result = run_single_action_client(config.host, config.port, "start",
-                                      uid=uid)
-    click.echo(f'Start "{uid}" -> {result}')
+                                      uid=uid, command_kwargs=kwargs)
+    click.echo(f'Start "{uid} ({kwargs})" -> {result}')
+
+
+def get_context_kwargs():
+    kwargs = {}
+    for item in get_current_context().args:
+        key, value = item.split("=")
+        kwargs[key] = value
+    return kwargs
 
 
 @cli.command()

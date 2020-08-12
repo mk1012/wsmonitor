@@ -25,14 +25,25 @@ class ClientAction:
 
 class CallbackClientAction(ClientAction):
 
-    def __init__(self, action_id, keys: List[str], func: Callable[[Any], Awaitable[ActionResponse]]):
+    def __init__(self, action_id, keys: List[str],
+                 func: Callable[[Any], Awaitable[ActionResponse]],
+                 defaults=None):
         ClientAction.__init__(self, action_id)
         self.keys = keys
         self.func = func
+        self.defaults: Dict = {} if defaults is None else defaults
 
     async def call_with_data(self, json_data: Dict[str, str]) -> ActionResponse:
-        if not all(map(lambda key: key in json_data.keys(), self.keys)):
-            return ActionFailure(None, self.action_id, f"Not all required keys: {self.keys} set")
+
+        missing = set(self.keys) - set(json_data.keys())
+        if len(missing) > 0:
+            # check if all of the missing keys are set in the defaults
+            missing_defaults = missing - set(self.defaults.keys())
+            if len(missing_defaults) == 0:
+                json_data.update({key: self.defaults[key] for key in missing})
+            else:
+                return ActionFailure(None, self.action_id,
+                                     f"Missing keys: {missing}")
 
         response = await self.func(*(json_data[key] for key in self.keys))
         logger.info("Action '%s' result: %s", self.action_id, response)
@@ -66,7 +77,8 @@ class WebsocketActionServer:
     async def start_server(self, host="127.0.0.1", port=8766):
         logger.info("Starting server on %s:%d", host, port)
         try:
-            self.server = await websockets.serve(self.__on_client_connected, host, port)
+            self.server = await websockets.serve(self.__on_client_connected,
+                                                 host, port)
         except Exception as excpt:
             logger.error("Failed to start webserver: %s", excpt)
             return False
@@ -93,7 +105,8 @@ class WebsocketActionServer:
     async def welcome_client(self, websocket):
         pass
 
-    async def __client_loop_may_throw(self, websocket: websockets.WebSocketServerProtocol):
+    async def __client_loop_may_throw(self,
+                                      websocket: websockets.WebSocketServerProtocol):
         # Send initial information
         await self.welcome_client(websocket)
 
@@ -117,14 +130,16 @@ class WebsocketActionServer:
         try:
             json_data = json.loads(line)
         except json.JSONDecodeError:
-            return ActionFailure(None, "invalid", "Received invalid input: %s" % line)
+            return ActionFailure(None, "invalid",
+                                 "Received invalid input: %s" % line)
 
         action_name = json_data.get("action", None)
         payload = json_data.get("data", None)
 
         if action_name not in self.known_actions or payload is None:
             logger.warning("Invalid action %s", action_name)
-            return ActionFailure(None, action_name, f"Invalid action '{action_name}' or missing data")
+            return ActionFailure(None, action_name,
+                                 f"Invalid action '{action_name}' or missing data")
 
         action = self.known_actions[action_name]
         return await action.call_with_data(payload)

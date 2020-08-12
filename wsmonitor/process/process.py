@@ -44,17 +44,19 @@ class Process:
     def set_output_listener(self, listener: OutputCallback) -> None:
         self._output_listener = listener
 
-    async def _run_process(self) -> int:
+    async def _run_process(self, **kwargs) -> int:
         preexec_fn = None
         if self._data.as_process_group:
             # Run process in a new process group
             # https://stackoverflow.com/questions/4789837/how-to-terminate-a-python-subprocess-launched-with-shell-true
             preexec_fn = os.setsid
 
-        logger.debug("Process[%s]: starting", self._data.uid)
+        command = self._data.get_command(**kwargs)
+        logger.debug("Process[%s]: starting command: %s", self._data.uid, command)
         try:
+
             self._asyncio_process = await asyncio.create_subprocess_shell(
-                self._data.command, stdout=PIPE, stderr=PIPE,
+                command, stdout=PIPE, stderr=PIPE,
                 preexec_fn=preexec_fn, bufsize=0)
         except Exception as excpt:
             logger.warning(f"Failed to start process[{self.uid()}: {excpt}")
@@ -63,6 +65,8 @@ class Process:
 
             self._state_changed(ProcessData.ENDED)
             return -1
+
+        logger.debug("Process[%s](%d): running", self._data.uid, self._asyncio_process.pid)
 
         # TODO(mark): we need to process the output to not deadlock
         # Schedule the read tasks and after that signal the state change
@@ -144,7 +148,7 @@ class Process:
             if handler is not None:
                 handler(self, line)
 
-    def start_as_task(self) -> Union[asyncio.Future, str]:
+    def start_as_task(self, **kwargs) -> Union[asyncio.Future, str]:
         if self._data.is_in_state(ProcessData.ENDED):
             logger.info("Restarting ended task: %s", self.uid())
             # reset process state
@@ -159,7 +163,7 @@ class Process:
 
         # change state to ensure single start, without an event
         self._data.state = ProcessData.STARTING
-        self._process_task = asyncio.ensure_future(self._run_process())
+        self._process_task = asyncio.ensure_future(self._run_process(**kwargs))
         return self._process_task
 
     def get_start_task(self) -> asyncio.Task:
@@ -230,12 +234,16 @@ class Process:
 
         logger.debug("Process[%s]: Stopping, escalating to SIGKILL",
                      self.uid())
-        kill_fn(pid, signal.SIGKILL)
 
-        # SIGKILL cannot be avoided the exit code should be set
-        # TODO(mark): this does seem to hang sometimes, maybe a stdout deadlock
-        # problem? call wait() here? would this be better?
-        self._asyncio_process.kill()
+        # Kill regularly, also kill the asyncio process
+        try:
+            kill_fn(pid, signal.SIGKILL)
+        except:
+            pass
+        finally:
+            self._asyncio_process.kill()
+
+        # Make sure we are no longer reading (maybe call this earlier?)
         if self._stream_future is not None:
             self._stream_future.cancel()
 

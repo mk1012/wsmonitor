@@ -25,12 +25,15 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         self._is_running = False
 
         self.known_actions.update({
-            "add": CallbackClientAction("add", ["uid", "cmd", "group"],
-                                        self.__add_action),
+            "add": CallbackClientAction("add", ["uid", "cmd", "group",
+                                                "command_kwargs"],
+                                        self.__add_action,
+                                        defaults={"command_kwargs": None}),
             "remove": CallbackClientAction("remove", ["uid"],
                                            self.__remove_action),
-            "start": CallbackClientAction("start", ["uid"],
-                                          self.__start_action),
+            "start": CallbackClientAction("start", ["uid", "command_kwargs"],
+                                          self.__start_action,
+                                          defaults={"command_kwargs": {}}),
             "restart": CallbackClientAction("restart", ["uid"],
                                             self.__restart_action),
             "stop": CallbackClientAction("stop", ["uid"], self.__stop_action),
@@ -56,8 +59,8 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         await self.stop_server()
 
     async def __add_action(self, uid: str, cmd: str,
-                           group=True) -> ActionResponse:
-        result = self.add_process(uid, cmd, group)
+                           group=True, command_kwargs=None) -> ActionResponse:
+        result = self.add_process(uid, cmd, group,command_kwargs)
         if isinstance(result, str):
             return ActionFailure(uid, "add", result)
 
@@ -76,8 +79,8 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         payload = [proc.to_json() for proc in self.get_processes()]
         return ActionResponse(None, "list", True, payload)
 
-    async def __start_action(self, uid: str) -> ActionResponse:
-        result = self.start_process(uid)
+    async def __start_action(self, uid: str, command_kwargs) -> ActionResponse:
+        result = self.start_process(uid, **command_kwargs)
         if isinstance(result, str):
             return ActionFailure(uid, "start", result)
 

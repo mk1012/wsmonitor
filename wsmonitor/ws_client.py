@@ -62,7 +62,6 @@ class WSMonitorClient:
         # TODO: block further actions if still waiting for result?
 
         data = json.dumps({"action": action_name, "data": kwargs})
-
         # we want to receive a response to our action
         self._awaited_response = AwaitedResponse(action_name)
         await self.websocket.send(data)

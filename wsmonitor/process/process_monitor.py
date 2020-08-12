@@ -19,7 +19,7 @@ class ProcessMonitor:
         self._output_event_queue = asyncio.Queue()
         self._gather_monitoring_tasks_future: Optional[Task] = None
 
-    def add_process(self, uid: str, command: str, as_process_group: bool = True) -> Union[str, Process]:
+    def add_process(self, uid: str, command: str, as_process_group: bool = True, command_kwargs=None) -> Union[str, Process]:
         if uid in self._processes:
             process = self._processes[uid]
             if process.is_running():
@@ -31,7 +31,7 @@ class ProcessMonitor:
                 logger.info("Updated process %s: %s", uid, process.get_data())
                 return process
 
-        process = Process(ProcessData(uid, command, as_process_group))
+        process = Process(ProcessData(uid, command, as_process_group, command_kwargs=command_kwargs))
         self._processes[uid] = process
         logger.info("Added new process %s", uid)
         return process
@@ -48,7 +48,7 @@ class ProcessMonitor:
         logger.info("Removed process %s", uid)
         return True
 
-    def start_process(self, uid: str) -> Union[str, asyncio.Future]:
+    def start_process(self, uid: str, **kwargs) -> Union[str, asyncio.Future]:
 
         if uid not in self._processes:
             return "No process with name '%s'" % uid
@@ -63,7 +63,7 @@ class ProcessMonitor:
         process.set_output_listener(
             lambda proc, output: self._output_event_queue.put_nowait(OutputEvent(proc.uid(), output.decode())))
 
-        return process.start_as_task()
+        return process.start_as_task(**kwargs)
 
     async def stop_process(self, uid: str) -> Union[int, str]:
         if uid not in self._processes:
