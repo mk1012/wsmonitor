@@ -125,7 +125,7 @@ class Process:
             logger.warning("Exception stopping process", exc_info=excpt)
             return "Exception while stopping process %s" % excpt.__class__.__name__
 
-    def restart_ended_process(self) -> Union[str, asyncio.Future]:
+    def restart_ended_process(self, **kwargs) -> Union[str, asyncio.Future]:
         if self._data.state != ProcessData.ENDED:
             msg = f"Process {self.uid()} cannot be re-started in state: {self._data.state}"
             logger.warning(msg)
@@ -136,7 +136,7 @@ class Process:
         self._asyncio_process = None
         self._process_task = None
 
-        return self.start_as_task()
+        return self.start_as_task(**kwargs)
 
     async def _read_stream(self, stream: asyncio.StreamReader,
                            handler: Callable) -> None:

@@ -34,8 +34,10 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
             "start": CallbackClientAction("start", ["uid", "command_kwargs"],
                                           self.__start_action,
                                           defaults={"command_kwargs": {}}),
-            "restart": CallbackClientAction("restart", ["uid"],
-                                            self.__restart_action),
+            "restart": CallbackClientAction("restart",
+                                            ["uid", "command_kwargs"],
+                                            self.__restart_action,
+                                            defaults={"command_kwargs": {}}),
             "stop": CallbackClientAction("stop", ["uid"], self.__stop_action),
             "list": CallbackClientAction("list", [], self.__list_action),
         })
@@ -60,7 +62,7 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
 
     async def __add_action(self, uid: str, cmd: str,
                            group=True, command_kwargs=None) -> ActionResponse:
-        result = self.add_process(uid, cmd, group,command_kwargs)
+        result = self.add_process(uid, cmd, group, command_kwargs)
         if isinstance(result, str):
             return ActionFailure(uid, "add", result)
 
@@ -87,8 +89,10 @@ class WebsocketProcessMonitor(ProcessMonitor, WebsocketActionServer):
         self.trigger_periodic_event.set()
         return ActionResponse(uid, "start", True)
 
-    async def __restart_action(self, uid: str) -> ActionResponse:
-        result = await self.restart_process(uid, ignore_stop_failure=True)
+    async def __restart_action(self, uid: str,
+                               command_kwargs) -> ActionResponse:
+        result = await self.restart_process(uid, ignore_stop_failure=True,
+                                            **command_kwargs)
         if isinstance(result, str):
             return ActionFailure(uid, "restart", result)
 
